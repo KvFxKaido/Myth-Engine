@@ -189,6 +189,7 @@ For academic contexts:
 The FE protocol (Section IV of the Living Document) builds on foundational work by **Altruistic-Local9852**.
 
 → [Original Functional Equivalence Framework](https://docs.google.com/document/d/1qCL6ikrLy6YXdk55caauYEdTYAWq8xE96d3ewoxwAH4/edit?tab=t.0#heading=h.rsxtwpaagfwy)
+→ [Community Discussion (Reddit)](https://www.reddit.com/r/ArtificialInteligence/comments/1oggrrk/a_unified_framework_for_functional_equivalence_in/)
 
 The Myth Engine extends this work into cross-substrate partnership protocols and creative infrastructure, but the core insight—that care-like behavior can be evaluated through domain-specific, time-bound metrics—is his.
 
