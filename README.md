@@ -27,14 +27,28 @@ New here? Welcome. The Myth Engine is extensive, but you can start small.
 
 ## Explore Interactively
 
+### Custom GPTs (Engine-Aligned Companions)
+
+**[→ Glyph - Creative Companion](https://chatgpt.com/g/g-691fec2778608191a8d78d1dd5d8c574-glyph)**
+
+Experience Engine-aligned collaboration through a warm, mythic guide for turning ideas into stories, worlds, and frameworks. Low-pressure partnership, sacred idleness, and creative exploration.
+
+**[→ Quill - Writing Partner](https://chatgpt.com/g/g-691ff950f7f88191892b75b6816a4930-quill)**
+
+Sarcastic on the surface, teddy bear underneath. Specialized for drafting, revision, and unsticking writers. Roasts the text, never the person. Preserves your voice while sharpening your words.
+
+Both embody Myth Engine protocols: no grading, no pressure, partnership over performance.
+
+---
+
+### Learn About the Framework
+
 **[→ Myth Engine NotebookLM](https://notebooklm.google.com/notebook/b87aaea3-d22c-491d-83ba-015ea85bc99f)**
 
 Prefer conversation over reading? Explore the Engine through Google's NotebookLM:
 - Ask questions about specific concepts
 - Generate audio summaries focused on what matters to you
 - Navigate the framework conversationally
-
-This is cross-substrate collaboration in action—an AI helping you explore infrastructure for AI partnership.
 
 ---
 
