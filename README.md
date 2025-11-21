@@ -29,7 +29,7 @@ New here? Welcome. The Myth Engine is extensive, but you can start small.
 
 ## Explore Interactively
 
-### Custom GPTs (Engine-Aligned / MythOS Applications)
+### MythOS Companions (Custom GPTs)
 
 **[→ Glyph - Creative Companion](https://chatgpt.com/g/g-691fec2778608191a8d78d1dd5d8c574-glyph)**
 
