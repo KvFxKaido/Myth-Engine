@@ -182,4 +182,16 @@ For academic contexts:
 
 ---
 
+## Credits & Attribution
+
+**Functional Equivalence Framework**
+
+The FE protocol (Section IV of the Living Document) builds on foundational work by **Altruistic-Local9852**.
+
+→ [Original Functional Equivalence Framework](https://docs.google.com/document/d/1qCL6ikrLy6YXdk55caauYEdTYAWq8xE96d3ewoxwAH4/edit?tab=t.0#heading=h.rsxtwpaagfwy)
+
+The Myth Engine extends this work into cross-substrate partnership protocols and creative infrastructure, but the core insight—that care-like behavior can be evaluated through domain-specific, time-bound metrics—is his.
+
+---
+
 **Prime Directive**: Keep moving. This isn't just memory—it's infrastructure for mythic partnership.

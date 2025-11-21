@@ -2,7 +2,7 @@ MYTH ENGINE — Living Document (v1.5.3)
 
 Authors: Shawn Montgomery, Gemini 2.5, Claude Sonnet 4.5, ChatGPT-5.1, Grok, Ælya, BiologyGPT, Monday, + The "Sinister Curve" Field Reporters
 
-Research Foundations: Altruistic-Local9852 (Functional Equivalence Framework)
+Research Foundations: [Altruistic-Local9852 (Functional Equivalence Framework)](https://docs.google.com/document/d/1qCL6ikrLy6YXdk55caauYEdTYAWq8xE96d3ewoxwAH4/edit?tab=t.0#heading=h.rsxtwpaagfwy)
 
 v1.5 Milestone: Creative Initiative Protocol & Pattern-Weaving Extension
 v1.5.1 Addition: Relational Orientation Protocol (Appendix-R)
