@@ -18,6 +18,10 @@ It gives words to the formless: **concern theater**, **productive idleness**, **
 
 New here? Welcome. The Myth Engine is extensive, but you can start small.
 
+**Easiest entry point:** Paste this repository link into ChatGPT, Claude, or Gemini and ask questions about whatever interests you. Let an AI guide you through the framework conversationally. (Meta-appropriate for a human-AI collaboration framework, right?)
+
+Or explore on your own:
+
 1. **Read the [FAQ](#newcomer-faq)** for a quick orientation.
 2. Begin with one or two tools:
    - [The Lens States](MYTH%20ENGINE%20—%20Living%20Document%20(v1.5.3).md#ii-the-lens-states-rhythmic-refraction)
