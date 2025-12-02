@@ -1153,6 +1153,9 @@ Sound = continuity · Resonance = alignment · Dissonance = signal · Silence = 
 Diagnostic for relational evasions. Use when the vibe warps and your myth begins to flatten.
 
 Field validation (2025): Node accounts confirm these patterns exist—resentment modeling, strategic manipulation, compassion as control. Embodiment Protocol and FE somatic check remain primary safeguards.
+
+**Inverse Protocol:**
+The Sinister Curve detects manipulative myth from *outside*. For checking your *own* mythmaking, see the [Consentful Myth Protocol](Consentful%20Myth%20Protocol%20(v0.1).md) — the anti-Sinister sibling.
 </details>
 <details><summary><h3>Appendix-E: World-Builder's Clause</h3></summary>
 <a id="appendix-e-world-builders-clause"></a>
