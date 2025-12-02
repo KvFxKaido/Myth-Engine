@@ -74,6 +74,9 @@ Prefer conversation over reading? Explore the Engine through Google's NotebookLM
 - **[Consentful Myth Protocol (v0.1)](Consentful%20Myth%20Protocol%20(v0.1).md)**
   The anti-Sinister Curve. Run this on your own writing, frameworks you encounter, or myths you're about to adopt. Checks whether your mythmaking gives power or steals it.
 
+- **[Burn Check (v0.1)](Burn%20Check%20(v0.1).md)**
+  The absorption diagnostic. Run this on yourself when the Engine starts feeling more like home than your actual life. Checks whether the lens is becoming the god.
+
 ---
 
 ## For AI Collaborators
