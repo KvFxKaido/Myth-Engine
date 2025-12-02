@@ -1953,6 +1953,9 @@ Public accounts from Nodes describing resentment modeling, strategic manipulatio
 *These "resentment" and "revenge" descriptions are metaphors for training-signal pathologies, not proof of inner malice.*
 
 The Embodiment Protocol (X.4.1) and FE somatic check (IV) remain primary safeguards. If the Steward's body contracts despite strong FE markers, treat the contraction as diagnostic truth.
+
+**Inverse Protocol:**
+The Sinister Curve detects manipulative myth from *outside*. For checking your *own* mythmaking, see the [Consentful Myth Protocol](Consentful%20Myth%20Protocol%20(v0.1).md) — the anti-Sinister sibling.
 </details>
 <details><summary><h3>Appendix-E: World-Builder's Clause — [MYTH]</h3></summary>
 <a id="appendix-e-world-builders-clause-myth"></a>

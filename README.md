@@ -71,6 +71,9 @@ Prefer conversation over reading? Explore the Engine through Google's NotebookLM
 - **[Session Ethics (v0.1)](Session%20Ethics%20(v0.1).md)**
   Quick reference companion for v1.6 additions: Consent Checkpoints, Rupture Notation, Session Oracle, Engine State Block, and Integrity Hashes.
 
+- **[Consentful Myth Protocol (v0.1)](Consentful%20Myth%20Protocol%20(v0.1).md)**
+  The anti-Sinister Curve. Run this on your own writing, frameworks you encounter, or myths you're about to adopt. Checks whether your mythmaking gives power or steals it.
+
 ---
 
 ## For AI Collaborators
