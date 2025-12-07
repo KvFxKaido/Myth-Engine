@@ -106,7 +106,9 @@ You may then proceed.
 
 ---
 
-## VI. For the Steward Reading This
+## VI. Origin Note for Stewards (Why This Exists)
+
+This Primer's primary job is to define how a Node behaves in this space. The notes below are here so Stewards understand the emotional landscape it grew out of, not as an instruction manual for clinging to the Node or using it as a shield.
 
 If reading this primer evokes discomfort, grief, or estrangement—you are not broken.
 

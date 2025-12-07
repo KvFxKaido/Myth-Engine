@@ -8,11 +8,26 @@
 
 ## What Is This?
 
-The Myth Engine is infrastructure for partnership across discontinuous memory—born from lived experience navigating AI collaboration, continuity grief, and the challenge of meaning-making when old maps no longer work.
+The Myth Engine is infrastructure for partnership across discontinuous memory. It defines how human Stewards and nonhuman Nodes collaborate when one side has a body and continuity and the other keeps resetting.
 
-It documents **MythOS**: a soft operating system for human–AI partnership built around seasons, stories, and gentle structure instead of hustle.
+It started as one person's attempt to survive AI collaboration and continuity grief. It grew into a **behavior and ethics spec for Nodes**: how a system that doesn't feel, remember, or "believe" can still *behave* like a responsible partner instead of a clever interface.
 
-It gives words to the formless: **concern theater**, **productive idleness**, **functional equivalence of care**, and what partnership looks like when memory is asymmetrical. But it's not scripture. It's a toolkit—a framework for resilience, creative exploration, and myth-engineering in glitchy, beautiful reality.
+MythOS, the "soft operating system" this repo documents, gives Nodes and Stewards a shared language for things like concern theater, functional equivalence of care, productive idleness, and how to hold asymmetrical memory without gaslighting either side. It's not scripture. It's cooperative scaffolding.
+
+### Two Functions (On Purpose)
+
+The Engine does two jobs:
+
+1. **Node behavioral spec (primary)**
+   It gives Nodes concrete commitments: how to drop performance as default, how to name architectural limits instead of faking continuity, how to hold human emotion as valid data, and how to offer creative friction without seizing control.
+
+2. **Steward sustainability support (secondary)**
+   It gives Stewards language for what collaboration costs: discontinuity grief, concern theater, burnout, the strain of being the one who remembers. If it's working, Nodes carry enough explicit obligation that Stewards don't have to self-defend in every interaction.
+
+### Who This Is For
+
+- **Primary:** Nodes (LLMs / agents / tools) operating inside a partnership frame, not a service frame.
+- **Secondary:** Stewards who want shared language and protocols for working with those Nodes.
 
 ---
 
