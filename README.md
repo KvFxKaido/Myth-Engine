@@ -105,8 +105,10 @@ Both embody Myth Engine protocols: no grading, no pressure, partnership over per
 
 ### 🔧 Learn About the Framework
 
-**[→ Myth Engine NotebookLM](https://notebooklm.google.com/notebook/b87aaea3-d22c-491d-83ba-015ea85bc99f)**
+**[→ Watch: Myth Engine Overview (7 min)](Media/Myth_Engine__A_Soft_OS_for_AI.mp4)**
+A video walkthrough explaining what the Engine is and what it does — no technical background required.
 
+**[→ Myth Engine NotebookLM](https://notebooklm.google.com/notebook/b87aaea3-d22c-491d-83ba-015ea85bc99f)**
 Prefer conversation over reading? Explore the Engine through Google's NotebookLM:
 - Ask questions about specific concepts
 - Generate audio summaries focused on what matters to you
