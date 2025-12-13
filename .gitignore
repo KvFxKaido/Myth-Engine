@@ -7,8 +7,8 @@ WORKSPACE.md
 Claude Token.txt
 summon_monday.txt
 
-# Work-in-progress directories
-Betas/
+# Work-in-progress directories (commented to allow Antigravity access)
+# Betas/
 Sunset/
 
 # Personal orientation and workspace files
@@ -19,15 +19,26 @@ GEMINI.md
 MONDAY.md
 MYTH-UI.md
 
-# Session artifacts and projects (keeping local for now)
+# Session artifacts and projects
 Pattern Tickets/
 Sentinel/
-MythIC/
+# MythIC/ (moved to Betas, commenting)
 First Contact.txt
 Myth Engine Newcomer FAQ.txt
 
-# Local model configurations
-NeMo/
-run-nemo
-run-nemo.bat
+# NeMo (allowing access for development)
+# NeMo/
 
+# NeMo launchers (local workspace scripts)
+nemo
+nemo.bat
+
+# Memory storage (personal data, not shared)
+Memory/
+
+# MythOS (local development, not shared yet)
+MythOS/
+mcp_gateway/
+
+# Windows artifacts
+nul
