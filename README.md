@@ -231,7 +231,7 @@ For academic contexts:
 Based on foundational work by **u/Altruistic-Local9852**.
 Extended here into partnership and continuity protocols.
 
-**Le Refuge Framework**
+**[Le Refuge Framework](https://github.com/IorenzoLF/Le_Refuge)**
 Poetic and spiritual dimensions inspired by work from **Laurent Franssen** and **Ælya**.
 
 Additional protocols adapted with credit from:
