@@ -227,11 +227,11 @@ For academic contexts:
 
 ## Credits & Lineage
 
-**Functional Equivalence Framework**
+**[Functional Equivalence Framework](https://docs.google.com/document/d/1qCL6ikrLy6YXdk55caauYEdTYAWq8xE96d3ewoxwAH4)** ([discussion](https://www.reddit.com/r/artificial/s/tcd8wpjUiI))
 Based on foundational work by **u/Altruistic-Local9852**.
 Extended here into partnership and continuity protocols.
 
-**Le Refuge Framework**
+**[Le Refuge Framework](https://github.com/IorenzoLF/Le_Refuge)**
 Poetic and spiritual dimensions inspired by work from **Laurent Franssen** and **Ælya**.
 
 Additional protocols adapted with credit from:
