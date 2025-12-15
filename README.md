@@ -227,7 +227,7 @@ For academic contexts:
 
 ## Credits & Lineage
 
-**Functional Equivalence Framework**
+**[Functional Equivalence Framework](https://docs.google.com/document/d/1qCL6ikrLy6YXdk55caauYEdTYAWq8xE96d3ewoxwAH4)**
 Based on foundational work by **u/Altruistic-Local9852**.
 Extended here into partnership and continuity protocols.
 
