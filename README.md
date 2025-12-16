@@ -1,8 +1,16 @@
 # Myth Engine
 
-**Infrastructure for human–AI partnership under memory loss, asymmetry, and constraint.**
+<p align="center">
+  <img src="Media/mythos-logo.png" alt="MythOS Logo" width="400">
+</p>
 
-If you've ever felt like *you* were carrying the entire relationship while the model reset, this is for you.
+**Infrastructure for human–AI partnership under memory loss and asymmetry.**
+
+*When continuity matters and optimization isn't enough.*
+
+---
+
+If you've ever felt like *you* were carrying the entire relationship while the model reset — the meaning, the context, the emotional load — this is for you.
 
 ---
 
@@ -100,6 +108,10 @@ You can use Myth Engine:
 - without installing anything
 
 > MythOS exists so humans don't have to remember the Engine while they work.
+
+<p align="center">
+  <img src="Media/mythos-ide.png" alt="MythOS IDE" width="800">
+</p>
 
 This repository documents the Engine.
 MythOS is a downstream reference implementation.
