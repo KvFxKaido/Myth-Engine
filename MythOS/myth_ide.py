@@ -19,6 +19,7 @@ from textual import events
 import asyncio
 import os
 import sys
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -297,6 +298,13 @@ class SessionPickerModal(Screen):
     #session-buttons Button {
         margin-left: 1;
     }
+    /* Ethical friction: armed delete buttons */
+    .delete-armed {
+        background: #6b2020;
+        color: #ff6b6b;
+        border: solid #ff6b6b;
+        text-style: bold;
+    }
     """
 
     def __init__(self, sessions: list[dict], last_session_id: str | None, total_count: int = 0):
@@ -304,6 +312,9 @@ class SessionPickerModal(Screen):
         self.sessions = sessions
         self.last_session_id = last_session_id
         self.total_count = total_count
+        # Ethical friction: track armed state for destructive actions
+        self._delete_armed = False
+        self._delete_all_armed = False
 
     def compose(self) -> ComposeResult:
         last_hint = f"[dim]Last session: {self.last_session_id[:8]}...[/dim]" if self.last_session_id else "[dim]No last session saved[/dim]"
@@ -338,20 +349,54 @@ class SessionPickerModal(Screen):
                 yield Button("Start New", id="btn-session-new", variant="primary")
                 yield Button("Resume", id="btn-session-resume", variant="success")
 
+    def _reset_armed_state(self) -> None:
+        """Reset all armed delete buttons to normal state."""
+        self._delete_armed = False
+        self._delete_all_armed = False
+        try:
+            del_btn = self.query_one("#btn-session-delete", Button)
+            del_btn.label = "Delete"
+            del_btn.remove_class("delete-armed")
+            del_all_btn = self.query_one("#btn-session-delete-all", Button)
+            del_all_btn.label = "Delete All"
+            del_all_btn.remove_class("delete-armed")
+        except Exception:
+            pass
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-session-cancel":
             self.dismiss(None)
             return
 
         if event.button.id == "btn-session-new":
+            self._reset_armed_state()
             self.dismiss({"action": "new"})
             return
 
+        # Ethical friction: two-step delete for "Delete All"
         if event.button.id == "btn-session-delete-all":
-            if self.total_count > 0:
+            if self.total_count == 0:
+                return
+            if not self._delete_all_armed:
+                # First click: arm the button
+                self._delete_all_armed = True
+                self._delete_armed = False  # Disarm single delete
+                event.button.label = "Sure?"
+                event.button.add_class("delete-armed")
+                # Reset the other delete button
+                try:
+                    del_btn = self.query_one("#btn-session-delete", Button)
+                    del_btn.label = "Delete"
+                    del_btn.remove_class("delete-armed")
+                except Exception:
+                    pass
+                return
+            else:
+                # Second click: confirm deletion
                 self.dismiss({"action": "delete_all"})
-            return
+                return
 
+        # Ethical friction: two-step delete for single "Delete"
         if event.button.id == "btn-session-delete":
             input_widget = self.query_one("#session-input", Input)
             raw = (input_widget.value or "").strip()
@@ -361,11 +406,32 @@ class SessionPickerModal(Screen):
                 return
 
             idx = int(raw) - 1
-            if 0 <= idx < len(self.sessions):
-                self.dismiss({"action": "delete", "session_id": self.sessions[idx]["id"]})
-            else:
+            if not (0 <= idx < len(self.sessions)):
                 self.notify(f"Invalid # (1-{len(self.sessions)})", severity="error")
-            return
+                return
+
+            if not self._delete_armed:
+                # First click: arm the button
+                self._delete_armed = True
+                self._delete_all_armed = False  # Disarm delete all
+                event.button.label = "Sure?"
+                event.button.add_class("delete-armed")
+                # Reset the other delete button
+                try:
+                    del_all_btn = self.query_one("#btn-session-delete-all", Button)
+                    del_all_btn.label = "Delete All"
+                    del_all_btn.remove_class("delete-armed")
+                except Exception:
+                    pass
+                return
+            else:
+                # Second click: confirm deletion
+                self.dismiss({"action": "delete", "session_id": self.sessions[idx]["id"]})
+                return
+
+        # Any other button press resets armed state
+        if event.button.id == "btn-session-resume":
+            self._reset_armed_state()
 
         if event.button.id != "btn-session-resume":
             return
@@ -394,74 +460,6 @@ class SessionPickerModal(Screen):
         self.dismiss({"action": "resume", "session_id": raw})
 
 
-class SessionStateBar(Static):
-    """Class III: Top bar for soft session state with iconic format."""
-    mode = reactive("Workshop")
-    lens = reactive("Blue")
-    idleness = reactive(False)
-    session_label = reactive("New")
-    # Context as band string, not fake %. Honest until we have real data.
-    context_band = reactive("Unknown")
-
-    def _mode_icon(self) -> str:
-        """Get icon for current mode."""
-        if self.idleness:
-            return "🕯"  # Sacred Idleness overrides mode visually
-        return "🛠" if self.mode == "Workshop" else "🏛"
-
-    def _lens_icon(self) -> str:
-        """Get icon for current lens."""
-        icons = {"Blue": "🔵", "Red": "🔴", "Purple": "🟣"}
-        return icons.get(self.lens, "⚪")
-
-    def _context_icon(self) -> str:
-        """Get icon for context load."""
-        if "Critical" in self.context_band:
-            return "🔥"
-        elif "High" in self.context_band:
-            return "⚠️"
-        elif "Medium" in self.context_band:
-            return "⚡"
-        return "💚"
-
-    def _idle_display(self) -> str:
-        """Get idleness display."""
-        if self.idleness:
-            return "[🕯 Idle]"
-        return ""
-
-    def compose(self) -> ComposeResult:
-        with Horizontal(id="state-bar"):
-            yield Label(self._format_mode(), id="mode-label")
-            yield Label(self._format_lens(), id="lens-label")
-            yield Label(self._format_idle(), id="idle-label")
-            yield Label(self._format_session(), id="session-label")
-            yield Label(self._format_context(), id="context-label")
-
-    def _format_mode(self) -> str:
-        return f"[{self._mode_icon()} {self.mode}]"
-
-    def _format_lens(self) -> str:
-        return f"[{self._lens_icon()} {self.lens}]"
-
-    def _format_idle(self) -> str:
-        return "[🕯 Idle]" if self.idleness else ""
-
-    def _format_session(self) -> str:
-        return f"[📋 {self.session_label}]"
-
-    def _format_context(self) -> str:
-        return f"[{self._context_icon()} {self.context_band}]"
-
-    def update_display(self):
-        """Update all labels with iconic format."""
-        self.query_one("#mode-label", Label).update(self._format_mode())
-        self.query_one("#lens-label", Label).update(self._format_lens())
-        self.query_one("#idle-label", Label).update(self._format_idle())
-        self.query_one("#session-label", Label).update(self._format_session())
-        self.query_one("#context-label", Label).update(self._format_context())
-
-
 class WorkspaceTree(Vertical):
     """Class II: Shared Context Visibility."""
     def compose(self) -> ComposeResult:
@@ -484,8 +482,6 @@ class ProtocolDeck(Vertical):
             yield Button("Purple", id="lens-purple", classes="lens-btn")
 
         yield Label("[b]Protocols[/b]", classes="panel-header")
-        yield Button("Consent Check", id="btn-consent", classes="proto-btn")
-        yield Button("Log Rupture", id="btn-rupture", classes="proto-btn")
         yield Button("Weave Ticket", id="btn-ticket", classes="proto-btn proto-btn-accent")
         yield Button("Sessions", id="btn-sessions", classes="proto-btn")
         yield Button("Models", id="btn-models", classes="proto-btn")
@@ -520,10 +516,30 @@ class StatusBar(Static):
     """Bottom status showing connection state."""
     connected = reactive(False)
     model_name = reactive("Not connected")
+    context_band = reactive("Unknown")
+
+    # Moon phases for context load: empty → filling → half → full
+    CONTEXT_GLYPHS = {
+        "Low": "○",      # Empty moon - plenty of space
+        "Medium": "◔",   # Quarter - filling up
+        "High": "◑",     # Half - getting full
+        "Critical": "●", # Full moon - at capacity
+    }
+
+    def _get_context_glyph(self) -> str:
+        """Get moon glyph for current context band."""
+        if "Critical" in self.context_band:
+            return self.CONTEXT_GLYPHS["Critical"]
+        elif "High" in self.context_band:
+            return self.CONTEXT_GLYPHS["High"]
+        elif "Medium" in self.context_band:
+            return self.CONTEXT_GLYPHS["Medium"]
+        return self.CONTEXT_GLYPHS["Low"]
 
     def compose(self) -> ComposeResult:
-        status = "Connected" if self.connected else "Disconnected"
-        yield Label(f"Node: {self.model_name} | Status: {status}", id="status-text")
+        with Horizontal(id="status-bar-content"):
+            yield Label(self._get_context_glyph(), id="context-glyph")
+            yield Label(f"Node: {self.model_name} | Status: {'Connected' if self.connected else 'Disconnected'}", id="status-text")
 
     def update_status(self, connected: bool, model: str = ""):
         self.connected = connected
@@ -531,6 +547,14 @@ class StatusBar(Static):
         self.query_one("#status-text", Label).update(
             f"Node: {self.model_name} | Status: {'Connected' if connected else 'Disconnected'}"
         )
+
+    def update_context_glyph(self, band: str):
+        """Update the moon glyph based on context band."""
+        self.context_band = band
+        try:
+            self.query_one("#context-glyph", Label).update(self._get_context_glyph())
+        except Exception:
+            pass
 
 
 class ChatInput(TextArea):
@@ -571,19 +595,6 @@ class MythIDE(App):
     Screen {
         layout: vertical;
         background: #000000;
-    }
-
-    /* Class III: Session State Bar */
-    #state-bar {
-        height: 3;
-        background: #000000;
-        border-bottom: solid #1a1a1a;
-        padding: 0 1;
-        content-align: center middle;
-    }
-    #state-bar Label {
-        margin: 0 1;
-        color: #a0a0a0;
     }
 
     /* Layout Containers */
@@ -665,15 +676,16 @@ class MythIDE(App):
 
     /* Input Area */
     #input-container {
-        height: 5;
+        height: 3;
         padding: 0;
         background: #000000;
     }
     #chat-input {
         width: 100%;
         height: 100%;
-        background: #0a0a0a;
-        border: solid #1a1a1a;
+        background: #000000;
+        border: none;
+        border-top: solid #1a1a1a;
         color: #e0e0e0;
     }
 
@@ -683,6 +695,29 @@ class MythIDE(App):
         background: #000000;
         color: #505050;
         padding: 0 1;
+    }
+    #status-bar-content {
+        height: 1;
+        width: 100%;
+    }
+    #context-glyph {
+        width: 3;
+        color: #909090;
+        margin-right: 1;
+    }
+    #status-text {
+        width: 1fr;
+    }
+
+    /* Temporal Empathy: Border dims when idle */
+    NeuralStream.idle-dim {
+        border: solid #0d0d0d;  /* ~25% of #1a1a1a */
+    }
+    .mode-workshop NeuralStream.idle-dim {
+        border: solid #12202c;  /* ~25% of #4a7ab0 */
+    }
+    .mode-sanctuary NeuralStream.idle-dim {
+        border: solid #221a2c;  /* ~25% of #8a6ab0 */
     }
 
     /* Header/Footer */
@@ -719,6 +754,8 @@ class MythIDE(App):
         ("ctrl+b", "toggle_sidebar", "Toggle Sidebar"),
         ("ctrl+r", "sessions", "Sessions"),
         ("f2", "models", "Models"),
+        ("f3", "consent_check", "Consent"),
+        ("f4", "log_rupture", "Rupture"),
         ("ctrl+o", "open_external", "Open in Editor"),
         ("ctrl+j", "insert_newline", "Newline"),
     ]
@@ -803,9 +840,13 @@ class MythIDE(App):
         # Ticket weaving guard
         self._weaving_ticket = False
 
+        # Temporal empathy: track input activity for border dimming
+        self._last_input_time = time.time()
+        self._idle_dim_active = False
+        self.IDLE_THRESHOLD = 45  # seconds before border dims (midpoint of 30-60)
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield SessionStateBar()
 
         with Horizontal(id="main-layout"):
             # Left: Files (Context Visibility)
@@ -831,6 +872,9 @@ class MythIDE(App):
 
         # Set initial mode for border color
         self.add_class("mode-workshop")
+
+        # Temporal empathy: start idle check timer (checks every 5 seconds)
+        self.set_interval(5.0, self._check_idle_state)
 
         # Show ritual entry splash (threshold moment)
         # On dismiss, continue to _post_splash_startup
@@ -1013,16 +1057,9 @@ class MythIDE(App):
         self._update_context_band()
 
     def _update_session_label(self, name: str) -> None:
-        """Update SessionStateBar session label (trimmed)."""
-        try:
-            state_bar = self.query_one(SessionStateBar)
-            label = (name or "New").strip()
-            if len(label) > 24:
-                label = label[:21] + "..."
-            state_bar.session_label = label
-            state_bar.update_display()
-        except Exception:
-            pass
+        """Update session label (for future use, e.g., in title bar)."""
+        # SessionStateBar removed - state communicated through ambient signals
+        pass
 
     def action_sessions(self) -> None:
         """Open session picker modal."""
@@ -1032,6 +1069,18 @@ class MythIDE(App):
             return
 
         asyncio.create_task(self._open_session_picker())
+
+    def action_consent_check(self) -> None:
+        """Invoke consent checkpoint (F3). Ritual protocol for explicit consent."""
+        stream = self.query_one(NeuralStream)
+        stream.add_message("[yellow]--- CONSENT CHECKPOINT ---[/yellow]", "system")
+        stream.add_message("[dim]Pausing for explicit consent. Please confirm before continuing.[/dim]", "system")
+
+    def action_log_rupture(self) -> None:
+        """Log a rupture moment (F4). Ritual protocol for noting misattunement."""
+        stream = self.query_one(NeuralStream)
+        stream.add_message("[red]--- RUPTURE LOGGED ---[/red]", "system")
+        stream.add_message("[dim]Misattunement noted. Consider repair before proceeding.[/dim]", "system")
 
     async def _open_session_picker(self) -> None:
         try:
@@ -1385,10 +1434,15 @@ class MythIDE(App):
 
     async def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
         """Handle submission from ChatInput (Enter or Ctrl+Enter)."""
+        self._reset_input_activity()  # Temporal empathy: user is active
         await self._send_message(event.value)
         # Clear the input after submission
         text_input = self.query_one("#chat-input", ChatInput)
         text_input.text = ""
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        """Handle typing activity for temporal empathy."""
+        self._reset_input_activity()  # User is typing - room wakes up
 
     async def action_submit_message(self) -> None:
         """Handle chat input from button or binding."""
@@ -1601,7 +1655,6 @@ class MythIDE(App):
         """Handle button presses."""
         button_id = event.button.id
         stream = self.query_one(NeuralStream)
-        state_bar = self.query_one(SessionStateBar)
 
         # Lens buttons
         if button_id in ("lens-blue", "lens-red", "lens-purple"):
@@ -1641,23 +1694,12 @@ class MythIDE(App):
                 stream.add_message("[dim]Mode: Sanctuary - Rest and reflection[/dim]", "system")
 
         # Protocol buttons
-        elif button_id == "btn-consent":
-            stream.add_message("[yellow]--- CONSENT CHECKPOINT ---[/yellow]", "system")
-            stream.add_message("[dim]Pausing for explicit consent. Please confirm before continuing.[/dim]", "system")
-        elif button_id == "btn-rupture":
-            stream.add_message("[red]--- RUPTURE LOGGED ---[/red]", "system")
-            stream.add_message("[dim]Misattunement noted. Consider repair before proceeding.[/dim]", "system")
         elif button_id == "btn-ticket":
             await self.initiate_ticket_weave()
         elif button_id == "btn-sessions":
             self.action_sessions()
         elif button_id == "btn-models":
             self.action_models()
-
-        # Update state bar
-        state_bar.lens = self.session_lens
-        state_bar.mode = self.session_mode
-        state_bar.update_display()
 
     async def on_directory_tree_file_selected(self, event) -> None:
         """Handle file selection in the workspace tree.
@@ -1672,7 +1714,6 @@ class MythIDE(App):
         file_path = str(event.path)
         self.selected_file = file_path
         stream = self.query_one(NeuralStream)
-        state_bar = self.query_one(SessionStateBar)
 
         # Check if it's actually a file (not directory)
         if not event.path.is_file():
@@ -1902,7 +1943,6 @@ Output ONLY valid JSON."""
         if event.switch.id == "toggle-idleness":
             self.idle_mode = event.value
             stream = self.query_one(NeuralStream)
-            state_bar = self.query_one(SessionStateBar)
 
             # Get mode buttons for visual suspension
             try:
@@ -1937,9 +1977,6 @@ Output ONLY valid JSON."""
                     sanctuary_btn.disabled = False
                 # Log event
                 asyncio.create_task(self._log_event("idleness_toggled", {"state": False, "restored_mode": self.session_mode}))
-
-            state_bar.idleness = self.idle_mode
-            state_bar.update_display()
 
     def action_clear_chat(self) -> None:
         """Clear the chat stream and conversation history."""
@@ -2075,6 +2112,36 @@ Output ONLY valid JSON."""
         else:
             return f"~Critical ({pct}%)"
 
+    # ==================== TEMPORAL EMPATHY ====================
+
+    def _reset_input_activity(self) -> None:
+        """Reset input timer and restore border if dimmed."""
+        self._last_input_time = time.time()
+        if self._idle_dim_active:
+            self._idle_dim_active = False
+            try:
+                stream = self.query_one(NeuralStream)
+                stream.remove_class("idle-dim")
+            except Exception:
+                pass
+
+    def _check_idle_state(self) -> None:
+        """Check if user has been idle and dim border accordingly.
+
+        Temporal Empathy: The room breathes with the user.
+        After IDLE_THRESHOLD seconds of no input, the border softens.
+        """
+        elapsed = time.time() - self._last_input_time
+
+        if elapsed >= self.IDLE_THRESHOLD and not self._idle_dim_active:
+            # User has been idle - dim the border
+            self._idle_dim_active = True
+            try:
+                stream = self.query_one(NeuralStream)
+                stream.add_class("idle-dim")
+            except Exception:
+                pass
+
     def _update_context_band(self) -> str:
         """Update the context band display and return current band.
 
@@ -2090,10 +2157,10 @@ Output ONLY valid JSON."""
             self._surface_context_transition(previous_band, band)
             self._last_context_band = band
 
+        # Update moon glyph in StatusBar
         try:
-            state_bar = self.query_one(SessionStateBar)
-            state_bar.context_band = band
-            state_bar.update_display()
+            status_bar = self.query_one(StatusBar)
+            status_bar.update_context_glyph(band)
         except Exception:
             pass
 

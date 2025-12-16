@@ -1,7 +1,7 @@
 # MythOS Council Status
 
-**Last updated:** 2025-12-15 (Session 4)
-**Phase:** v0.1 — Stable (Profile System + Session Management)
+**Last updated:** 2025-12-16 (Session 6 — Tier 1 Complete)
+**Phase:** v0.1 — Stable (Tier 1 complete, interface polish locked)
 
 ## Current State
 
@@ -44,7 +44,7 @@ Done (v0.1 — Implemented)
 
  Workspace tree with live filesystem view
 
- Session State Bar (Mode, Lens, Idleness, Context)
+ ~~Session State Bar~~ — Removed (state communicated through ambient signals)
 
  Lens picker & protocol buttons wired
 
@@ -246,6 +246,66 @@ Done (v0.1 — Implemented)
    - Picker re-opens after delete to show updated count
    - ✅ Validated working (2025-12-15)
 
+ IDEAS.md backlog — consolidated Council chat synthesis (Claude Opus 4.5)
+   - TUI patterns (TUI GPT): ambient signals, temporal empathy, ethical friction, spatial memory
+   - UI maturity (PM GPT): Hide → Compress → Promote, boring = trust
+   - Release polish (Monday): README tone, onboarding script, profiles system
+   - Architecture (Full Stack GPT): profile loader, 3-layer by contract, v0.1 exit criteria
+   - Implementation (Code Copilot): full profiles.py module, release workflow, issue templates
+   - Organized into Tier 1 (ship soon), Tier 2 (architectural), Tier 3 (v0.2+)
+
+ README tone shift (Claude Opus 4.5)
+   - New tagline: "When continuity matters and optimization isn't enough."
+   - Added CGPT2 logo at top (resized to 400px)
+   - Added IDE screenshot in MythOS section (resized to 1200px)
+   - Images stored in `Media/` folder
+
+ v0.1 exit criteria — FRICTION-SPEC.md v0.5 (Claude Opus 4.5)
+   - 5 testable criteria with pass conditions
+   - Cold start < 60s, mode switching coherence, context warning timing
+   - Sacred Idleness integrity, session resume fidelity
+   - Summary table for quick reference
+
+ Ethical friction on delete buttons (Claude Opus 4.5)
+   - Delete and Delete All now require two clicks
+   - First click: button changes to "Sure?" with armed styling (.delete-armed CSS)
+   - Second click: performs the action
+   - Clicking other buttons resets armed state
+   - Pattern: "Destructive actions should feel heavy"
+
+ De-prototype pass — sidebar declutter (Claude Opus 4.5)
+   - Removed Consent Check and Log Rupture buttons from ProtocolDeck
+   - Demoted to keyboard shortcuts: F3 (Consent), F4 (Rupture)
+   - Sidebar now shows only: Weave Ticket, Sessions, Models
+   - Pattern: "If an action is rarely used, it should feel hard to notice, not easy to click"
+
+ Ambient signals — moon glyph for context load (Claude Opus 4.5)
+   - Moon phases in status bar (left): `○ → ◔ → ◑ → ●`
+   - Maps to context bands: Low/Medium/High/Critical
+   - Updates automatically when context changes
+   - Pattern: "Inform without demanding" (TUI GPT)
+   - ✅ Tier 1.1 complete
+
+ Temporal empathy — border dims on idle (Claude Opus 4.5)
+   - NeuralStream border dims after 45 seconds of no input
+   - Typing or sending message restores immediately
+   - Mode-specific dimming (Workshop blue → dim blue, Sanctuary purple → dim purple)
+   - ~25% opacity reduction — noticeable but not jarring
+   - Pattern: "The room breathes with the user" (TUI GPT)
+   - ✅ Tier 1.2 complete
+
+ SessionStateBar removal — de-prototype (Claude Opus 4.5)
+   - Removed top state bar entirely (Mode, Lens, Idleness, Session, Context)
+   - State now communicated through: border color (mode), button states (lens/idle), moon glyph (context)
+   - Header retained: title + clock only
+   - Pattern: "Every pixel carries meaning or gets out" (PM GPT)
+
+ Input box sleeker — minimal chrome (Claude Opus 4.5)
+   - Height: 5 → 3 lines
+   - Border: full box → top line only
+   - Background: matches room (pure black)
+   - Pattern: "The interface should be a whisper, not a shout"
+
 In Progress (Validation Phase)
 Task	Owner	Friction Class	Status
 Validate Context thresholds under real work	Shawn + Claude	III (State)	🧪 Testing
@@ -373,3 +433,12 @@ Date	Decision	Rationale
 2025-12-15	Session deletion from picker	Direct manipulation over command parsing; type number + Delete = gone
 2025-12-15	Session count in picker header	"Showing 10 of 14" makes deletion progress visible; no silent truncation
 2025-12-15	Delete All for sessions	Nuclear option when testing fills DB; starts fresh session automatically
+2025-12-16	IDEAS.md as living backlog	Consolidated Council chat insights; tiered by implementation priority
+2025-12-16	Ethical friction = two-step delete	Destructive actions should feel heavy; consent embodied mechanically (TUI GPT pattern)
+2025-12-16	v0.1 exit criteria in FRICTION-SPEC	"Not vibes — testable conditions"; 5 concrete checks with pass conditions
+2025-12-16	De-prototype = demote rarely-used	Consent Check + Log Rupture → F3/F4 keybinds; "If rarely used → hard to notice" (PM GPT)
+2025-12-16	Ambient signals = moon glyph	Context load as filling moon (○→◔→◑→●); "Inform without demanding" (TUI GPT)
+2025-12-16	Temporal empathy = border dim	45s idle → border dims 25%; typing restores; "The room breathes with the user"
+2025-12-16	SessionStateBar removed	State through feel, not labels; border color + button states + moon glyph communicate all
+2025-12-16	Input box = minimal line	Height 3, top border only; "The interface should be a whisper"
+2025-12-16	Tier 1 complete	All 6 polish items shipped; interface disappearing as intended
