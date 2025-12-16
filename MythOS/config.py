@@ -480,6 +480,20 @@ def list_profiles() -> list[str]:
     return [p.stem for p in PROFILES_DIR.glob("*.json")]
 
 
+def get_all_profiles() -> list[dict]:
+    """Load all available profiles with name and description for picker UI."""
+    profiles = []
+    for name in list_profiles():
+        profile = load_profile(name)
+        if profile:
+            profiles.append({
+                "name": profile.get("name", name),
+                "description": profile.get("description", ""),
+                "file": name
+            })
+    return profiles
+
+
 def load_profile(profile_name: str) -> dict | None:
     """Load a profile by name, with caching."""
     import json

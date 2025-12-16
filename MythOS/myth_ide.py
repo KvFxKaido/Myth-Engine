@@ -80,7 +80,7 @@ class TicketModal(Screen):
             self.dismiss(None)
 
 
-# Profile-specific splash art (for future profile system)
+# Profile-specific splash art
 SPLASH_ART = {
     "nemo": {
         "ascii": r"""
@@ -96,9 +96,20 @@ SPLASH_ART = {
         "tagline": "Grounded Node · Partnership-First Interface",
         "color": "bright_magenta",
     },
-    # Future profiles can be added here:
-    # "oracle": { "ascii": "...", "tagline": "...", "color": "purple" },
-    # "minimal": { "ascii": "...", "tagline": "...", "color": "white" },
+    "oracle": {
+        "ascii": r"""
+
+     ██████╗ ██████╗  █████╗  ██████╗██╗     ███████╗
+    ██╔═══██╗██╔══██╗██╔══██╗██╔════╝██║     ██╔════╝
+    ██║   ██║██████╔╝███████║██║     ██║     █████╗
+    ██║   ██║██╔══██╗██╔══██║██║     ██║     ██╔══╝
+    ╚██████╔╝██║  ██║██║  ██║╚██████╗███████╗███████╗
+     ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚══════╝
+
+        """,
+        "tagline": "Patterns into Reflection",
+        "color": "purple",
+    },
 }
 
 
@@ -146,6 +157,121 @@ class SplashScreen(Screen):
     def on_key(self, event) -> None:
         """Dismiss on any key press."""
         self.dismiss(True)
+
+
+class ProfilePickerModal(Screen):
+    """Modal for switching Node profiles mid-session."""
+
+    CSS = """
+    ProfilePickerModal {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.5);
+    }
+    #profile-dialog {
+        width: 60%;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1;
+    }
+    #profile-list {
+        height: auto;
+        max-height: 20;
+        margin: 1 0;
+        border: solid $secondary;
+        padding: 1;
+        overflow-y: auto;
+    }
+    #profile-buttons {
+        height: auto;
+        align: right middle;
+    }
+    #profile-buttons Button {
+        margin-left: 1;
+    }
+    .profile-current {
+        color: #8a6ab0;
+    }
+    """
+
+    def __init__(self, profiles: list[dict], current_profile: str):
+        super().__init__()
+        self.profiles = profiles
+        self.current_profile = current_profile
+
+    def compose(self) -> ComposeResult:
+        lines = []
+        if self.profiles:
+            lines.append("[b]Available Profiles[/b]")
+            lines.append("")
+            for i, p in enumerate(self.profiles, 1):
+                name = p.get("name", "Unknown")
+                desc = p.get("description", "")
+                current = " [cyan]← current[/cyan]" if name.lower() == self.current_profile.lower() else ""
+                lines.append(f"{i}. [b]{name}[/b]{current}")
+                if desc:
+                    lines.append(f"   [dim]{desc}[/dim]")
+        else:
+            lines.append("[dim]No profiles found in profiles/ folder[/dim]")
+
+        with Container(id="profile-dialog"):
+            yield Label("[b]Switch Profile[/b]", classes="panel-header")
+            yield Static(f"[dim]Current: {self.current_profile}[/dim]", classes="info-box")
+            yield Static("\n".join(lines), id="profile-list")
+            yield Input(placeholder="Enter profile # or name", id="profile-input")
+            with Horizontal(id="profile-buttons"):
+                yield Button("Cancel", id="btn-profile-cancel", variant="error")
+                yield Button("Switch", id="btn-profile-switch", variant="success")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-profile-cancel":
+            self.dismiss(None)
+            return
+
+        if event.button.id != "btn-profile-switch":
+            return
+
+        # Get input value
+        try:
+            input_widget = self.query_one("#profile-input", Input)
+            raw = input_widget.value.strip()
+        except Exception:
+            self.dismiss(None)
+            return
+
+        if not raw:
+            self.dismiss(None)
+            return
+
+        # Try to parse as number
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(self.profiles):
+                self.dismiss({"profile": self.profiles[idx].get("name", "").lower()})
+                return
+        except ValueError:
+            pass
+
+        # Treat as profile name
+        self.dismiss({"profile": raw.lower()})
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key in input."""
+        raw = event.value.strip()
+        if not raw:
+            return
+
+        # Try number first
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(self.profiles):
+                self.dismiss({"profile": self.profiles[idx].get("name", "").lower()})
+                return
+        except ValueError:
+            pass
+
+        self.dismiss({"profile": raw.lower()})
 
 
 class ModelPickerModal(Screen):
@@ -485,6 +611,7 @@ class ProtocolDeck(Vertical):
         yield Button("Weave Ticket", id="btn-ticket", classes="proto-btn proto-btn-accent")
         yield Button("Sessions", id="btn-sessions", classes="proto-btn")
         yield Button("Models", id="btn-models", classes="proto-btn")
+        yield Button("Profiles", id="btn-profiles", classes="proto-btn")
 
         yield Label("[b]Sacred Idleness[/b]", classes="panel-header")
         with Horizontal(classes="toggle-row"):
@@ -753,6 +880,7 @@ class MythIDE(App):
         ("ctrl+l", "clear_chat", "Clear"),
         ("ctrl+b", "toggle_sidebar", "Toggle Sidebar"),
         ("ctrl+r", "sessions", "Sessions"),
+        ("f1", "profiles", "Profiles"),
         ("f2", "models", "Models"),
         ("f3", "consent_check", "Consent"),
         ("f4", "log_rupture", "Rupture"),
@@ -780,6 +908,7 @@ class MythIDE(App):
     MAX_RAM_EXCHANGES = 10  # Max conversation pairs to keep in RAM history
     HISTORY_CONTEXT_TURNS = 5 # Number of recent conversation turns to include as context for Node
     PREF_LAST_SESSION_KEY = "last_session_id"  # Preference key for session resume
+    PREF_LAST_PROFILE_KEY = "last_profile"  # Preference key for profile persistence
 
     # Known context windows for common models (in tokens)
     # Add models as you encounter them - this is a practical lookup, not exhaustive
@@ -876,9 +1005,28 @@ class MythIDE(App):
         # Temporal empathy: start idle check timer (checks every 5 seconds)
         self.set_interval(5.0, self._check_idle_state)
 
-        # Show ritual entry splash (threshold moment)
+        # Initialize database early so we can read profile preference
+        try:
+            from core.database import Database
+            self.db = Database()
+            await self.db.initialize()
+        except Exception:
+            self.db = None
+
+        # Load saved profile preference (default to nemo)
+        splash_profile = "nemo"
+        if self.db:
+            try:
+                saved_profile = await self.db.get_preference(self.PREF_LAST_PROFILE_KEY, default="nemo")
+                if saved_profile and saved_profile in SPLASH_ART:
+                    splash_profile = saved_profile
+                    self.current_profile_name = saved_profile
+            except Exception:
+                pass
+
+        # Show ritual entry splash with saved profile (threshold moment)
         # On dismiss, continue to _post_splash_startup
-        self.push_screen(SplashScreen(profile="nemo"), callback=self._post_splash_startup)
+        self.push_screen(SplashScreen(profile=splash_profile), callback=self._post_splash_startup)
 
     def _post_splash_startup(self, result) -> None:
         """Continue startup after splash dismisses."""
@@ -887,15 +1035,7 @@ class MythIDE(App):
 
     async def _initialize_app(self) -> None:
         """Initialize database and complete startup (called after splash)."""
-        # Initialize database for protocol + conversation persistence
-        try:
-            from core.database import Database
-            self.db = Database()
-            await self.db.initialize()
-        except Exception as e:
-            # Non-fatal: logging is optional, don't block startup
-            self.db = None
-
+        # DB already initialized in on_mount for profile preference
         # Pick session (resume/new), then continue startup
         await self._begin_session_flow()
 
@@ -1176,6 +1316,65 @@ class MythIDE(App):
     def action_models(self) -> None:
         """Open model picker modal."""
         asyncio.create_task(self._open_model_picker())
+
+    def action_profiles(self) -> None:
+        """Open profile picker modal."""
+        asyncio.create_task(self._open_profile_picker())
+
+    async def _open_profile_picker(self) -> None:
+        """Open the profile picker modal."""
+        from config import get_all_profiles
+
+        profiles = get_all_profiles()
+        self.push_screen(
+            ProfilePickerModal(profiles=profiles, current_profile=self.current_profile_name),
+            self._handle_profile_choice,
+        )
+
+    async def _handle_profile_choice(self, result: dict | None) -> None:
+        """Handle profile picker result."""
+        if not result or not result.get("profile"):
+            return
+
+        new_profile = result["profile"]
+        if new_profile == self.current_profile_name:
+            return  # No change
+
+        stream = self.query_one(NeuralStream)
+
+        # Load the new profile
+        await self._load_profile(new_profile)
+
+        # Save profile preference for next launch
+        if self.db:
+            try:
+                await self.db.set_preference(self.PREF_LAST_PROFILE_KEY, new_profile)
+            except Exception:
+                pass
+
+        # Clear stream and show new profile's splash
+        if self.current_profile:
+            profile_name = self.current_profile.get("name", new_profile)
+            profile_key = profile_name.lower()
+
+            # Clear existing messages
+            for child in list(stream.children):
+                child.remove()
+
+            # Show new profile's ASCII art
+            splash_data = SPLASH_ART.get(profile_key, SPLASH_ART.get("nemo"))
+            if splash_data:
+                stream.add_message(splash_data.get("ascii", ""), "system")
+                stream.add_message(splash_data.get("tagline", ""), "system")
+
+            stream.add_message(f"[bold #8a6ab0]Profile: {profile_name}[/bold #8a6ab0]", "system")
+
+            # Check for preferred model
+            preferred = self.current_profile.get("preferred_model")
+            if preferred:
+                stream.add_message(f"[dim]Preferred model: {preferred}[/dim]", "system")
+
+            stream.add_message("[dim]Ready.[/dim]", "system")
 
     async def _open_model_picker(self) -> None:
         """Open the model picker modal with current backend's models."""
@@ -1700,6 +1899,8 @@ class MythIDE(App):
             self.action_sessions()
         elif button_id == "btn-models":
             self.action_models()
+        elif button_id == "btn-profiles":
+            self.action_profiles()
 
     async def on_directory_tree_file_selected(self, event) -> None:
         """Handle file selection in the workspace tree.

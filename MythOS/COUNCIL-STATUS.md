@@ -306,6 +306,24 @@ Done (v0.1 — Implemented)
    - Background: matches room (pure black)
    - Pattern: "The interface should be a whisper, not a shout"
 
+ Runtime profile switching — Tier 2.1 complete (Claude Opus 4.5)
+   - F1 keybind or Profiles button opens ProfilePickerModal
+   - Shows available profiles with descriptions
+   - Switch clears chat, shows new profile's ASCII art + tagline
+   - Prompts rebuild from new profile on next message
+   - Pattern: "The room can become a different room"
+
+ Oracle ASCII art — profile-specific splash (Claude Opus 4.5)
+   - Block-style ORACLE art matching NeMo aesthetic
+   - Tagline: "Patterns into Reflection"
+   - SPLASH_ART dict now has nemo + oracle entries
+
+ Profile persistence — remembers last profile (Claude Opus 4.5)
+   - PREF_LAST_PROFILE_KEY stores profile name in DB
+   - DB initialized before splash (restructured on_mount)
+   - Startup loads saved profile, shows correct splash
+   - Close on Oracle → reopen → Oracle greets you
+
 In Progress (Validation Phase)
 Task	Owner	Friction Class	Status
 Validate Context thresholds under real work	Shawn + Claude	III (State)	🧪 Testing
@@ -442,3 +460,7 @@ Date	Decision	Rationale
 2025-12-16	SessionStateBar removed	State through feel, not labels; border color + button states + moon glyph communicate all
 2025-12-16	Input box = minimal line	Height 3, top border only; "The interface should be a whisper"
 2025-12-16	Tier 1 complete	All 6 polish items shipped; interface disappearing as intended
+2025-12-16	Runtime profile switching	F1 or Profiles button; room transforms mid-session; "The room can become a different room"
+2025-12-16	Oracle ASCII art	Profile-specific splash; block style matching NeMo; each profile has visual identity
+2025-12-16	Profile persistence	DB stores last profile; splash shows correct profile on launch; continuity across sessions
+2025-12-16	DB init before splash	Restructured on_mount; DB must exist to read profile preference before showing splash
