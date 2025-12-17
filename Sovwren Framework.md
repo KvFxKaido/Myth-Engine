@@ -1,4 +1,4 @@
-Sovrin Framework (v1.1)
+Sovwren Framework (v1.1)
 
 Authors: Shawn Montgomery + AI collaborators
 Based on: Myth Engine v1.7
