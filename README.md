@@ -12,8 +12,6 @@ This framework defines:
 - ethical and behavioral guardrails
 - sustainability practices for humans carrying continuity
 
-It does not require mythic framing, roleplay, or belief.
-
 ## Lineage
 
 Earlier Myth Engine documents are preserved for historical context and reference.
