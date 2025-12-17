@@ -25,4 +25,13 @@ The framework stands on its own.
 
 ---
 
+## Acknowledgments
+
+The concept of **Functional Equivalence** in this framework draws from work by [u/Altruistic-Local9582](https://www.reddit.com/user/Altruistic-Local9582/):
+
+- [A Unified Framework for Functional Equivalence in AI](https://docs.google.com/document/d/1qCL6ikrLy6YXdk55caauYEdTYAWq8xE96d3ewoxwAH4/edit?tab=t.0#heading=h.rsxtwpaagfwy) (Google Doc)
+- [Reddit discussion](https://www.reddit.com/r/ArtificialInteligence/comments/1oggrrk/a_unified_framework_for_functional_equivalence_in/)
+
+---
+
 *This repository favors clarity over performance.*
