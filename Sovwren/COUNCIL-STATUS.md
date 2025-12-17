@@ -1,7 +1,7 @@
 # Sovwren Council Status
 
-**Last updated:** 2025-12-16 (Session 6 — Tier 1 Complete)
-**Phase:** v0.1 — Stable (Tier 1 complete, interface polish locked)
+**Last updated:** 2025-12-17 (Session 7 — Sovwren Rebrand Complete)
+**Phase:** v0.1 — Stable (Tier 1 complete, rebrand complete)
 
 ## Current State
 
@@ -10,7 +10,7 @@
 | Textual TUI | Running | sovwren_ide.py stable under Textual |
 | Local Model | Connected | Hot-swappable via F2; LM Studio + Ollama backends |
 | Python Backend | Active | Sovwren backend + NeMo core integrated |
-| RAG System | Live | Auto-indexes MythEngine workspace on first run |
+| RAG System | Live | Auto-indexes Sovwren workspace on first run |
 | Memory System | Wired | Direct file access (no MCP dependency) |
 | Node Tone | Tuned | Casual presence, single-image answers |
 | React Frontend | Parked | MythIC code present, deferred intentionally |
@@ -464,3 +464,9 @@ Date	Decision	Rationale
 2025-12-16	Oracle ASCII art	Profile-specific splash; block style matching NeMo; each profile has visual identity
 2025-12-16	Profile persistence	DB stores last profile; splash shows correct profile on launch; continuity across sessions
 2025-12-16	DB init before splash	Restructured on_mount; DB must exist to read profile preference before showing splash
+2025-12-17	Myth Engine → Sovwren rebrand	"The scaffolding is meant to come down once the building stands"; ethics survived translation
+2025-12-17	myth_ide.py → sovwren_ide.py	Primary entry point renamed; all internal references updated
+2025-12-17	MythOS → Sovwren codebase sweep	35+ references updated across 17 files; localStorage keys, package names, paths, UI text
+2025-12-17	Functional Equivalence credited	u/Altruistic-Local9582 acknowledged in README; original framework linked
+2025-12-17	GitHub topic updated	Removed "myth-engineering"; remaining: ai-ethics, llm-framework, cross-substrate-partnership, functional-equivalence
+2025-12-17	FRICTION-SPEC v0.5 synced	Local version with Exit Criteria pushed to repo; newer content preserved
