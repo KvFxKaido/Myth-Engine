@@ -3,7 +3,7 @@
 Scans workspace directories and ingests markdown/text files into the RAG system.
 Designed for the symbolic corpus vision from RAG-ROADMAP.md:
 - Pattern Tickets
-- Engine protocols
+- Framework protocols
 - Session logs
 - Lore documents
 """
@@ -223,7 +223,7 @@ class LocalIngester:
 
         This follows the RAG-ROADMAP.md vision:
         - Pattern Tickets
-        - Engine protocols
+        - Framework protocols
         - Session logs
         - Lore documents
         """

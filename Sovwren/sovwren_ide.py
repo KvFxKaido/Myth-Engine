@@ -30,7 +30,7 @@ workspace_root = project_root.parent          # .../Sovwren
 sys.path.insert(0, str(project_root))
 
 
-# --- MYTHIC COMPONENTS ---
+# --- UI COMPONENTS ---
 
 class TicketModal(Screen):
     """Modal for weaving a Pattern Ticket."""
@@ -590,7 +590,7 @@ class WorkspaceTree(Vertical):
     """Class II: Shared Context Visibility."""
     def compose(self) -> ComposeResult:
         yield Label("[b]Workspace[/b]", classes="panel-header")
-        # Point to MythEngine workspace
+        # Point to Sovwren workspace
         yield DirectoryTree(str(workspace_root), id="file-tree")
         yield Label("[b]Memory[/b]", classes="panel-header")
         yield Static("No memories loaded", id="memory-status", classes="info-box")
@@ -613,7 +613,7 @@ class ProtocolDeck(Vertical):
         yield Button("Models", id="btn-models", classes="proto-btn")
         yield Button("Profiles", id="btn-profiles", classes="proto-btn")
 
-        yield Label("[b]Sacred Idleness[/b]", classes="panel-header")
+        yield Label("[b]Idle[/b]", classes="panel-header")
         with Horizontal(classes="toggle-row"):
             yield Label("Idle Mode:", classes="toggle-label")
             yield Switch(value=False, id="toggle-idleness")
@@ -714,7 +714,7 @@ class ChatInput(TextArea):
 
 # --- MAIN APP ---
 
-class MythIDE(App):
+class SovwrenIDE(App):
     CSS = """
     /* AMOLED Theme: True black, soft text, quiet accents
        Rule: "Did this make me notice the interface less?" */
@@ -1610,9 +1610,9 @@ class MythIDE(App):
             total_vectors = stats.get('vector_store', {}).get('total_vectors', 0)
 
             if total_vectors == 0:
-                stream.add_message("[dim]No indexed documents. Indexing MythEngine corpus...[/dim]", "system")
+                stream.add_message("[dim]No indexed documents. Indexing Sovwren corpus...[/dim]", "system")
                 # Index the corpus (this may take a moment)
-                ingest_stats = await local_ingester.ingest_mythengine_corpus()
+                ingest_stats = await local_ingester.ingest_sovwren_corpus()
                 stream.add_message(
                     f"[green]Indexed {ingest_stats.get('files_ingested', 0)} files "
                     f"({ingest_stats.get('total_vectors', 0)} vectors)[/green]",
@@ -2131,7 +2131,7 @@ Output ONLY valid JSON."""
             if self.idle_mode:
                 # STATE TRANSITION: Idleness engaged (overrides mode)
                 stream.add_message(
-                    f"[bold cyan]🕯 Sacred Idleness engaged[/bold cyan] — {self.session_mode} suspended",
+                    f"[bold cyan]🕯 Idle[/bold cyan] — {self.session_mode} suspended",
                     "system"
                 )
                 # Dim mode buttons (visual suspension, not removal)
@@ -2144,7 +2144,7 @@ Output ONLY valid JSON."""
             else:
                 # STATE TRANSITION: Idleness released (mode auto-restores)
                 stream.add_message(
-                    f"[dim]🕯 Sacred Idleness released[/dim] — {self.session_mode} restored",
+                    f"[dim]🕯 Idle off[/dim] — {self.session_mode} restored",
                     "system"
                 )
                 # Re-enable mode buttons
@@ -2531,5 +2531,5 @@ Output ONLY valid JSON."""
 
 
 if __name__ == "__main__":
-    app = MythIDE()
+    app = SovwrenIDE()
     app.run()
