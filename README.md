@@ -4,7 +4,7 @@ This repository centers a plain-language framework for sustainable human–AI co
 
 ## Canonical Document
 
-**Partnership Framework — Plain Edition (v1.1)**  
+**Sovwren Framework (v1.1)**  
 → `Partnership-Framework.md`
 
 This framework defines:
