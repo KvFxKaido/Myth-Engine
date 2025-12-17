@@ -2,6 +2,18 @@
 
 This repository centers a plain-language framework for sustainable human–AI collaboration under memory asymmetry.
 
+## Why Sovwren Exists
+
+Most AI interfaces obscure critical state:
+- what the model can see
+- what it remembers
+- when context is saturated
+- when behavior changes due to mode or constraint
+
+This creates false intimacy, cognitive overhead, and ethical ambiguity.
+
+Sovwren makes these states explicit. Not to control the model — but to reduce the burden on the human carrying continuity.
+
 ## Canonical Document
 
 **Sovwren Framework (v1.1)**  
