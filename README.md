@@ -1,4 +1,4 @@
-# Sovrin Framework
+# SovWren Framework
 
 This repository centers a plain-language framework for sustainable human–AI collaboration under memory asymmetry.
 
