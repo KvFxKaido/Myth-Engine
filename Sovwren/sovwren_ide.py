@@ -80,6 +80,60 @@ class BookmarkModal(Screen):
             self.dismiss(None)
 
 
+class CommitModal(Screen):
+    """Modal for entering git commit message."""
+    CSS = """
+    CommitModal {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.5);
+    }
+    #commit-dialog {
+        width: 60%;
+        height: auto;
+        max-height: 50%;
+        background: $surface;
+        border: thick $primary;
+        padding: 1;
+    }
+    #commit-input {
+        width: 100%;
+        margin: 1 0;
+    }
+    #commit-buttons {
+        height: auto;
+        align: right middle;
+    }
+    #commit-buttons Button {
+        margin-left: 1;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Container(id="commit-dialog"):
+            yield Label("[b]Commit Message[/b]", classes="panel-header")
+            yield Input(placeholder="Enter commit message...", id="commit-input")
+            with Horizontal(id="commit-buttons"):
+                yield Button("Cancel", id="btn-cancel", variant="error")
+                yield Button("Commit", id="btn-commit", variant="success")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-commit":
+            input_widget = self.query_one("#commit-input", Input)
+            message = input_widget.value.strip()
+            if message:
+                self.dismiss(message)
+            else:
+                self.dismiss(None)
+        elif event.button.id == "btn-cancel":
+            self.dismiss(None)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Allow Enter to submit the commit."""
+        message = event.value.strip()
+        if message:
+            self.dismiss(message)
+
+
 # Profile-specific splash art
 SPLASH_ART = {
     "nemo": {
@@ -623,6 +677,12 @@ class ProtocolDeck(Vertical):
             yield Button("🛠 Workshop", id="mode-workshop", classes="mode-btn active")
             yield Button("🕯 Sanctuary", id="mode-sanctuary", classes="mode-btn")
 
+        yield Label("[b]Git[/b]", classes="panel-header panel-header-spaced")
+        with Horizontal(classes="button-row"):
+            yield Button("📥", id="btn-git-pull", classes="git-btn")
+            yield Button("📝", id="btn-git-commit", classes="git-btn")
+            yield Button("📤", id="btn-git-push", classes="git-btn")
+
 
 class NeuralStream(ScrollableContainer):
     """The Chat Window."""
@@ -1026,6 +1086,9 @@ class SovwrenIDE(App):
     .mode-btn { min-width: 8; margin: 0; }
     #mode-workshop.active { color: #4a7ab0; border: solid #4a7ab0; }
     #mode-sanctuary.active { color: #8a6ab0; border: solid #8a6ab0; }
+
+    /* Git buttons */
+    .git-btn { min-width: 6; margin: 0; }
 
     /* Protocol buttons */
     .proto-btn { width: 100%; margin: 0; }
@@ -2221,6 +2284,14 @@ class SovwrenIDE(App):
         elif button_id == "btn-close-tab":
             await self.action_close_tab()
 
+        # Git buttons
+        elif button_id == "btn-git-pull":
+            await self._git_pull()
+        elif button_id == "btn-git-commit":
+            await self._git_commit()
+        elif button_id == "btn-git-push":
+            await self._git_push()
+
     async def on_directory_tree_file_selected(self, event) -> None:
         """Handle file selection in the workspace tree.
 
@@ -2846,6 +2917,115 @@ Output ONLY valid JSON."""
                 memory_widget.update("No memories stored")
         except Exception:
             pass
+
+    # ==================== GIT OPERATIONS ====================
+
+    async def _git_pull(self) -> None:
+        """Pull latest changes from remote."""
+        import subprocess
+        stream = self.query_one(NeuralStream)
+        stream.add_message("[dim]📥 Pulling from remote...[/dim]", "system")
+
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ["git", "pull"],
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                output = result.stdout.strip() or "Already up to date."
+                stream.add_message(f"[green]✓ {output}[/green]", "system")
+            else:
+                error = result.stderr.strip() or result.stdout.strip() or "Pull failed"
+                stream.add_message(f"[red]✗ {error}[/red]", "error")
+        except Exception as e:
+            stream.add_message(f"[red]Git error: {e}[/red]", "error")
+
+    async def _git_commit(self) -> None:
+        """Open commit modal and commit staged/all changes."""
+        import subprocess
+        stream = self.query_one(NeuralStream)
+
+        # First check if there are changes to commit
+        try:
+            status_result = await asyncio.to_thread(
+                subprocess.run,
+                ["git", "status", "--porcelain"],
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True
+            )
+            if not status_result.stdout.strip():
+                stream.add_message("[dim]No changes to commit.[/dim]", "system")
+                return
+        except Exception as e:
+            stream.add_message(f"[red]Git error: {e}[/red]", "error")
+            return
+
+        # Show commit modal
+        message = await self.push_screen_wait(CommitModal())
+        if not message:
+            stream.add_message("[dim]Commit cancelled.[/dim]", "system")
+            return
+
+        stream.add_message(f"[dim]📝 Committing: {message}[/dim]", "system")
+
+        try:
+            # Stage all changes
+            await asyncio.to_thread(
+                subprocess.run,
+                ["git", "add", "-A"],
+                cwd=str(workspace_root),
+                capture_output=True
+            )
+
+            # Commit with message
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ["git", "commit", "-m", message],
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                # Extract short info from output
+                lines = result.stdout.strip().split('\n')
+                summary = lines[0] if lines else "Committed"
+                stream.add_message(f"[green]✓ {summary}[/green]", "system")
+            else:
+                error = result.stderr.strip() or result.stdout.strip() or "Commit failed"
+                stream.add_message(f"[red]✗ {error}[/red]", "error")
+        except Exception as e:
+            stream.add_message(f"[red]Git error: {e}[/red]", "error")
+
+    async def _git_push(self) -> None:
+        """Push commits to remote."""
+        import subprocess
+        stream = self.query_one(NeuralStream)
+        stream.add_message("[dim]📤 Pushing to remote...[/dim]", "system")
+
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run,
+                ["git", "push"],
+                cwd=str(workspace_root),
+                capture_output=True,
+                text=True
+            )
+            if result.returncode == 0:
+                output = result.stderr.strip() or result.stdout.strip() or "Pushed successfully"
+                # Git push outputs to stderr for progress
+                if "up-to-date" in output.lower() or "Everything up-to-date" in output:
+                    stream.add_message("[dim]Already up to date.[/dim]", "system")
+                else:
+                    stream.add_message(f"[green]✓ Pushed[/green]", "system")
+            else:
+                error = result.stderr.strip() or result.stdout.strip() or "Push failed"
+                stream.add_message(f"[red]✗ {error}[/red]", "error")
+        except Exception as e:
+            stream.add_message(f"[red]Git error: {e}[/red]", "error")
 
 
 if __name__ == "__main__":
