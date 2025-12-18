@@ -613,7 +613,7 @@ class ProtocolDeck(Vertical):
         yield Button("🤖 Models", id="btn-models", classes="proto-btn")
         yield Button("🪞 Profiles", id="btn-profiles", classes="proto-btn")
 
-        yield Label("[b]Presence[/b]", classes="panel-header")
+        yield Label("[b]Presence[/b]", classes="panel-header panel-header-spaced")
         with Horizontal(classes="toggle-row"):
             yield Label("🌙", classes="toggle-label")
             yield Switch(value=False, id="toggle-idleness")
@@ -982,6 +982,8 @@ class SovwrenIDE(App):
         background: #0a0a0a;
         text-style: bold;
     }
+    /* Micro-zoning: extra breathing room between Actions and State sections */
+    .panel-header-spaced { margin-top: 1; }
     .info-box { height: auto; padding: 0 1; color: #606060; }
 
     /* Class IV: Protocol Buttons */
@@ -1043,6 +1045,8 @@ class SovwrenIDE(App):
     .node { color: #b08ad0; }
     .steward { color: #e0e0e0; }
     .error { color: #d46a6a; }
+    .hint { color: #3a3a3a; text-style: italic; }  /* Ephemeral scaffolding: faint whisper */
+    .card { color: #808080; margin: 1 0; }  /* Session Resume Card */
 
     /* Input Area */
     #input-container {
@@ -1391,6 +1395,65 @@ class SovwrenIDE(App):
 
         self._update_session_label("New")
 
+    def _format_session_card(self, session: dict, conversations: list) -> str:
+        """Format a visual Session Card for resume display.
+
+        Creates a ritual of continuity — returning to a place, not loading a file.
+        """
+        from datetime import datetime
+
+        # Parse session data
+        name = session.get("name") or session.get("first_message_preview") or "Unnamed session"
+        if len(name) > 50:
+            name = name[:47] + "..."
+
+        message_count = session.get("message_count", 0)
+        last_active = session.get("last_active", "")
+
+        # Format timestamp
+        time_str = ""
+        if last_active:
+            try:
+                # Parse ISO format from SQLite
+                dt = datetime.fromisoformat(last_active.replace("Z", "+00:00"))
+                time_str = dt.strftime("%b %d, %I:%M %p").replace(" 0", " ").lstrip("0")
+            except Exception:
+                time_str = last_active[:16] if len(last_active) > 16 else last_active
+
+        # Build the card
+        lines = []
+        lines.append("[dim]┌─ Returning ─────────────────────────────────┐[/dim]")
+        lines.append(f"[dim]│[/dim] [bold]{name}[/bold]")
+
+        # Stats line
+        stats_parts = []
+        if time_str:
+            stats_parts.append(f"📅 {time_str}")
+        if message_count:
+            exchange_word = "exchange" if message_count == 1 else "exchanges"
+            stats_parts.append(f"💬 {message_count} {exchange_word}")
+        if stats_parts:
+            lines.append(f"[dim]│[/dim] [dim]{' · '.join(stats_parts)}[/dim]")
+
+        # Last 2-3 exchanges (condensed)
+        if conversations:
+            lines.append("[dim]├─────────────────────────────────────────────┤[/dim]")
+            # Show last 3 exchanges max, condensed
+            recent = conversations[-3:]
+            for conv in recent:
+                user_msg = (conv.get("user_message") or "")[:60]
+                if len(conv.get("user_message", "")) > 60:
+                    user_msg += "..."
+                ai_msg = (conv.get("ai_response") or "")[:60]
+                if len(conv.get("ai_response", "")) > 60:
+                    ai_msg += "..."
+                lines.append(f"[dim]│[/dim] [steward]› {user_msg}[/steward]")
+                lines.append(f"[dim]│[/dim] [#b08ad0]‹ {ai_msg}[/#b08ad0]")
+
+        lines.append("[dim]└─────────────────────────────────────────────┘[/dim]")
+
+        return "\n".join(lines)
+
     async def _resume_session(self, session_id: str) -> None:
         """Load prior session conversation into RAM (trimmed), ready to continue."""
         if self.db is None:
@@ -1426,17 +1489,11 @@ class SovwrenIDE(App):
         name = session.get("name") or session.get("first_message_preview") or "Unnamed"
         self._update_session_label(name)
 
-        # Surface in the stream (lightly, not a full scrollback dump).
+        # Display Session Card — ritual of continuity, not just "file loaded"
         try:
             stream = self.query_one(NeuralStream)
-            stream.add_message(f"[dim]Resumed session: {name}[/dim]", "system")
-            if self.conversation_history:
-                stream.add_message("[dim]Recent history loaded (trimmed).[/dim]", "system")
-                for role, content in self.conversation_history[-8:]:
-                    if role == "steward":
-                        stream.add_message(f"[b]›[/b] {content}", "steward")
-                    elif role == "node":
-                        stream.add_message(f"[b]‹[/b] {content}", "node")
+            card = self._format_session_card(session, conversations)
+            stream.add_message(card, "card")
         except Exception:
             pass
 
@@ -2118,6 +2175,11 @@ class SovwrenIDE(App):
             elif button_id == "lens-purple":
                 self.session_lens = "Purple"
                 stream.add_message("[dim]🟣 Symbolic[/dim]", "system")
+                # Ephemeral scaffolding: show one-time hint for first Purple activation
+                from config import get_hint_message
+                hint = get_hint_message("purple_first")
+                if hint:
+                    stream.add_message(f"    ↳ {hint}", "hint")
 
         # Mode buttons
         elif button_id in ("mode-workshop", "mode-sanctuary"):
@@ -2137,6 +2199,11 @@ class SovwrenIDE(App):
                 self.add_class("mode-sanctuary")
                 self.session_mode = "Sanctuary"
                 stream.add_message("[dim]🕯 Sanctuary[/dim]", "system")
+                # Ephemeral scaffolding: show one-time hint for first Sanctuary activation
+                from config import get_hint_message
+                hint = get_hint_message("sanctuary_first")
+                if hint:
+                    stream.add_message(f"    ↳ {hint}", "hint")
 
         # Protocol buttons
         elif button_id == "btn-bookmark":
@@ -2380,6 +2447,11 @@ Output ONLY valid JSON."""
                     f"[bold cyan]🕯 Idle[/bold cyan] — {self.session_mode} suspended",
                     "system"
                 )
+                # Ephemeral scaffolding: show one-time hint for first Idle activation
+                from config import get_hint_message
+                hint = get_hint_message("idle_first")
+                if hint:
+                    stream.add_message(f"    ↳ {hint}", "hint")
                 # Dim mode buttons (visual suspension, not removal)
                 if workshop_btn:
                     workshop_btn.disabled = True

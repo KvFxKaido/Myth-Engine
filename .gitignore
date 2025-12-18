@@ -3,10 +3,9 @@
 .claude/
 
 
-# Work-in-progress directories (commented to allow Antigravity access)
-# Betas/
-Sunset/
+# Work-in-progress directories
 Images/
+IDEAS.md
 # Personal orientation and workspace files
 AGENTS.md
 AGENTS.override.md

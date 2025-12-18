@@ -515,6 +515,68 @@ def load_profile(profile_name: str) -> dict | None:
         return None
 
 
+# ==================== EPHEMERAL SCAFFOLDING ====================
+# One-time hints that appear once per feature, then dissolve forever.
+# Tracked in user_prefs.json under "seen_hints".
+
+USER_PREFS_PATH = DATA_DIR / "user_prefs.json"
+
+# Hint definitions: key → message
+# These whispers appear once to orient new users, then never return.
+EPHEMERAL_HINTS = {
+    "idle_first": "Presence acknowledged. No output expected.",
+    "sanctuary_first": "Reflection without task pressure.",
+    "purple_first": "Names patterns without pushing solutions.",
+}
+
+
+def load_user_prefs() -> dict:
+    """Load user preferences from disk."""
+    import json
+    if USER_PREFS_PATH.exists():
+        try:
+            with open(USER_PREFS_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"seen_hints": {}, "version": 1}
+
+
+def save_user_prefs(prefs: dict) -> None:
+    """Save user preferences to disk."""
+    import json
+    try:
+        with open(USER_PREFS_PATH, 'w', encoding='utf-8') as f:
+            json.dump(prefs, f, indent=2)
+    except Exception:
+        pass  # Silent fail — hints are non-critical
+
+
+def should_show_hint(hint_key: str) -> bool:
+    """Check if a hint should be shown (hasn't been seen yet)."""
+    if hint_key not in EPHEMERAL_HINTS:
+        return False
+    prefs = load_user_prefs()
+    return not prefs.get("seen_hints", {}).get(hint_key, False)
+
+
+def mark_hint_seen(hint_key: str) -> None:
+    """Record that a hint has been shown (will never appear again)."""
+    prefs = load_user_prefs()
+    if "seen_hints" not in prefs:
+        prefs["seen_hints"] = {}
+    prefs["seen_hints"][hint_key] = True
+    save_user_prefs(prefs)
+
+
+def get_hint_message(hint_key: str) -> str | None:
+    """Get the hint message if it should be shown, and mark as seen."""
+    if should_show_hint(hint_key):
+        mark_hint_seen(hint_key)
+        return EPHEMERAL_HINTS.get(hint_key)
+    return None
+
+
 def build_system_prompt_from_profile(
     profile: dict,
     mode: str = "Workshop",
@@ -534,6 +596,11 @@ def build_system_prompt_from_profile(
     role = system_prompt.get("role", "")
     if role:
         parts.append(role)
+
+    # === PRIORITY HEADER (prompt hardening: explicit hierarchy reduces rule collision) ===
+    priority = system_prompt.get("priority_header", [])
+    if priority:
+        parts.append("\n".join(priority))
 
     # === CONVERSATIONAL STANCE ===
     stance = system_prompt.get("conversational_stance", [])
@@ -640,6 +707,11 @@ def build_system_prompt_from_profile(
                 parts.append(CONTEXT_HIGH_FIRST)
             else:
                 parts.append(CONTEXT_HIGH_ONGOING)
+
+    # === BEHAVIORAL CHECKSUM (prompt hardening: silent self-check before responding) ===
+    checksum = system_prompt.get("behavioral_checksum", [])
+    if checksum:
+        parts.append("\n".join(checksum))
 
     # === SUBSTRATE HONESTY (last, as override) ===
     substrate = system_prompt.get("substrate_honesty", [])
