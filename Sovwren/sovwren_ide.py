@@ -11,7 +11,7 @@ Usage:
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Input, Button, DirectoryTree, Label, Switch, TextArea
+from textual.widgets import Header, Footer, Static, Input, Button, DirectoryTree, Label, Switch, TextArea, TabbedContent, TabPane
 from textual.screen import Screen
 from textual.reactive import reactive
 from textual.message import Message
@@ -601,27 +601,27 @@ class WorkspaceTree(Vertical):
 class ProtocolDeck(Vertical):
     """Class IV & V: Protocol Invocation & Idleness."""
     def compose(self) -> ComposeResult:
-        yield Label("[b]Lens State[/b]", classes="panel-header")
+        yield Label("[b]Lens[/b]", classes="panel-header")
         with Horizontal(classes="button-row"):
-            yield Button("Blue", id="lens-blue", classes="lens-btn active")
-            yield Button("Red", id="lens-red", classes="lens-btn")
-            yield Button("Purple", id="lens-purple", classes="lens-btn")
+            yield Button("🔵", id="lens-blue", classes="lens-btn active")
+            yield Button("🔴", id="lens-red", classes="lens-btn")
+            yield Button("🟣", id="lens-purple", classes="lens-btn")
 
-        yield Label("[b]Protocols[/b]", classes="panel-header")
-        yield Button("Bookmark", id="btn-bookmark", classes="proto-btn proto-btn-accent")
-        yield Button("Sessions", id="btn-sessions", classes="proto-btn")
-        yield Button("Models", id="btn-models", classes="proto-btn")
-        yield Button("Profiles", id="btn-profiles", classes="proto-btn")
+        yield Label("[b]Actions[/b]", classes="panel-header")
+        yield Button("📑 Bookmark", id="btn-bookmark", classes="proto-btn proto-btn-accent")
+        yield Button("🧵 Sessions", id="btn-sessions", classes="proto-btn")
+        yield Button("🤖 Models", id="btn-models", classes="proto-btn")
+        yield Button("🪞 Profiles", id="btn-profiles", classes="proto-btn")
 
-        yield Label("[b]Idle[/b]", classes="panel-header")
+        yield Label("[b]Presence[/b]", classes="panel-header")
         with Horizontal(classes="toggle-row"):
-            yield Label("Idle Mode:", classes="toggle-label")
+            yield Label("🌙", classes="toggle-label")
             yield Switch(value=False, id="toggle-idleness")
 
         yield Label("[b]Mode[/b]", classes="panel-header")
         with Horizontal(classes="button-row"):
-            yield Button("Workshop", id="mode-workshop", classes="mode-btn active")
-            yield Button("Sanctuary", id="mode-sanctuary", classes="mode-btn")
+            yield Button("🛠 Workshop", id="mode-workshop", classes="mode-btn active")
+            yield Button("🕯 Sanctuary", id="mode-sanctuary", classes="mode-btn")
 
 
 class NeuralStream(ScrollableContainer):
@@ -712,6 +712,207 @@ class ChatInput(TextArea):
         super()._on_key(event)
 
 
+# --- TABBED EDITOR ---
+
+class EditorTab(TabPane):
+    """A single file tab in the editor."""
+
+    def __init__(self, file_path: str, content: str = "", title: str = None):
+        self.file_path = file_path
+        self.original_content = content
+        self._is_dirty = False
+
+        # Use filename as tab title
+        display_title = title or Path(file_path).name
+        super().__init__(display_title, id=f"tab-{hash(file_path)}")
+
+    def compose(self) -> ComposeResult:
+        # Detect language from extension
+        ext = Path(self.file_path).suffix.lower()
+        lang_map = {
+            ".py": "python",
+            ".js": "javascript",
+            ".ts": "typescript",
+            ".json": "json",
+            ".md": "markdown",
+            ".css": "css",
+            ".html": "html",
+            ".yaml": "yaml",
+            ".yml": "yaml",
+            ".toml": "toml",
+            ".sql": "sql",
+        }
+        language = lang_map.get(ext)
+
+        yield TextArea(
+            self.original_content,
+            id=f"editor-{hash(self.file_path)}",
+            language=language,
+            show_line_numbers=True,
+        )
+
+    @property
+    def is_dirty(self) -> bool:
+        return self._is_dirty
+
+    @is_dirty.setter
+    def is_dirty(self, value: bool) -> None:
+        self._is_dirty = value
+        # Update tab title with dirty indicator
+        name = Path(self.file_path).name
+        if value:
+            self.update(f"● {name}")
+        else:
+            self.update(f"{name}")
+
+    def get_content(self) -> str:
+        """Get current editor content."""
+        try:
+            editor = self.query_one(TextArea)
+            return editor.text
+        except Exception:
+            return self.original_content
+
+    def mark_saved(self) -> None:
+        """Mark as saved, update original content."""
+        self.original_content = self.get_content()
+        self.is_dirty = False
+
+
+class TabbedEditor(Vertical):
+    """Multi-tab code editor panel."""
+
+    def __init__(self):
+        super().__init__()
+        self.open_files: dict[str, EditorTab] = {}  # path -> tab
+        self.active_file: str = None
+
+    def compose(self) -> ComposeResult:
+        yield Label("[b]Editor[/b]", classes="panel-header")
+        yield TabbedContent(id="editor-tabs")
+        with Horizontal(id="editor-toolbar"):
+            yield Button("💾 Save", id="btn-save", classes="editor-btn")
+            yield Button("✕ Close", id="btn-close-tab", classes="editor-btn")
+            yield Static("", id="editor-status")
+
+    async def open_file(self, file_path: str) -> None:
+        """Open a file in a new tab (or focus existing)."""
+        # Normalize path
+        file_path = str(Path(file_path).resolve())
+
+        tabs = self.query_one("#editor-tabs", TabbedContent)
+
+        # If already open, just focus it
+        if file_path in self.open_files:
+            tab = self.open_files[file_path]
+            tabs.active = tab.id
+            self.active_file = file_path
+            self._update_status()
+            return
+
+        # Read file content
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+        except Exception as e:
+            self.app.notify(f"Cannot open file: {e}", severity="error")
+            return
+
+        # Create new tab
+        tab = EditorTab(file_path, content)
+        self.open_files[file_path] = tab
+
+        # Add the tab using proper API
+        await tabs.add_pane(tab)
+        tabs.active = tab.id
+        self.active_file = file_path
+        self._update_status()
+
+    async def close_file(self, file_path: str = None) -> bool:
+        """Close a file tab. Returns False if cancelled due to unsaved changes."""
+        file_path = file_path or self.active_file
+        if not file_path or file_path not in self.open_files:
+            return True
+
+        tab = self.open_files[file_path]
+
+        # Check for unsaved changes
+        if tab.is_dirty:
+            # For now, just warn - could add confirmation dialog
+            self.app.notify("Unsaved changes! Save first or changes will be lost.", severity="warning")
+            # Still close for now - can enhance later
+
+        # Remove tab using proper API
+        tabs = self.query_one("#editor-tabs", TabbedContent)
+        await tabs.remove_pane(tab.id)
+        del self.open_files[file_path]
+
+        # Update active file
+        if self.open_files:
+            self.active_file = list(self.open_files.keys())[0]
+        else:
+            self.active_file = None
+
+        self._update_status()
+        return True
+
+    def save_current(self) -> bool:
+        """Save the currently active file."""
+        if not self.active_file or self.active_file not in self.open_files:
+            self.notify("No file to save", severity="warning")
+            return False
+
+        tab = self.open_files[self.active_file]
+        content = tab.get_content()
+
+        try:
+            with open(self.active_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            tab.mark_saved()
+            self.notify(f"Saved: {Path(self.active_file).name}", severity="information")
+            self._update_status()
+            return True
+        except Exception as e:
+            self.notify(f"Save failed: {e}", severity="error")
+            return False
+
+    def _update_status(self) -> None:
+        """Update the editor status bar."""
+        try:
+            status = self.query_one("#editor-status", Static)
+            if self.active_file:
+                name = Path(self.active_file).name
+                tab = self.open_files.get(self.active_file)
+                dirty = "●" if tab and tab.is_dirty else ""
+                status.update(f"{dirty} {name}")
+            else:
+                status.update("[dim]No file open[/dim]")
+        except Exception:
+            pass
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        """Track dirty state when content changes."""
+        # Find which tab this belongs to
+        for path, tab in self.open_files.items():
+            try:
+                editor = tab.query_one(TextArea)
+                if editor.text != tab.original_content:
+                    tab.is_dirty = True
+                else:
+                    tab.is_dirty = False
+            except Exception:
+                pass
+        self._update_status()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Track which file is active."""
+        for path, tab in self.open_files.items():
+            if tab.id == event.tab.id:
+                self.active_file = path
+                self._update_status()
+                break
+
+
 # --- MAIN APP ---
 
 class SovwrenIDE(App):
@@ -724,11 +925,53 @@ class SovwrenIDE(App):
         background: #000000;
     }
 
-    /* Layout Containers */
+    /* Layout Containers - Three Column: Tree | Editor | Chat */
     #main-layout { height: 1fr; }
-    #sidebar-left { width: 22%; border-right: solid #1a1a1a; background: #000000; }
-    #sidebar-right { width: 18%; border-left: solid #1a1a1a; background: #000000; }
-    #center-stage { width: 1fr; }
+    #sidebar-left { width: 18%; min-width: 20; border-right: solid #1a1a1a; background: #000000; }
+    #editor-panel { width: 40%; border-right: solid #1a1a1a; background: #000000; }
+    #chat-panel { width: 1fr; background: #000000; }
+
+    /* Tabbed Editor */
+    TabbedEditor { height: 100%; }
+    #editor-tabs { height: 1fr; background: #000000; }
+    #editor-tabs ContentSwitcher { height: 1fr; }
+    #editor-tabs TabPane { height: 100%; padding: 0; }
+    #editor-tabs TextArea { height: 100%; background: #050505; border: none; }
+    #editor-toolbar {
+        height: 2;
+        background: #0a0a0a;
+        border-top: solid #1a1a1a;
+        align: left middle;
+        padding: 0 1;
+    }
+    .editor-btn {
+        min-width: 8;
+        height: 1;
+        margin-right: 1;
+    }
+    #editor-status {
+        width: 1fr;
+        text-align: right;
+        color: #606060;
+    }
+
+    /* Tab styling */
+    #editor-tabs Tabs {
+        background: #0a0a0a;
+        height: 2;
+    }
+    #editor-tabs Tab {
+        background: #0a0a0a;
+        color: #606060;
+        padding: 0 2;
+    }
+    #editor-tabs Tab.-active {
+        background: #1a1a1a;
+        color: #a0a0a0;
+    }
+    #editor-tabs Tab:hover {
+        background: #151515;
+    }
 
     /* Class II: File Tree */
     #file-tree { height: 60%; background: #000000; }
@@ -880,6 +1123,8 @@ class SovwrenIDE(App):
         ("ctrl+l", "clear_chat", "Clear"),
         ("ctrl+b", "toggle_sidebar", "Toggle Sidebar"),
         ("ctrl+r", "sessions", "Sessions"),
+        ("ctrl+s", "save_file", "Save"),
+        ("ctrl+w", "close_tab", "Close Tab"),
         ("f1", "profiles", "Profiles"),
         ("f2", "models", "Models"),
         ("f3", "consent_check", "Consent"),
@@ -978,19 +1223,20 @@ class SovwrenIDE(App):
         yield Header(show_clock=True)
 
         with Horizontal(id="main-layout"):
-            # Left: Files (Context Visibility)
+            # Left: File Tree
             with Vertical(id="sidebar-left"):
                 yield WorkspaceTree()
 
-            # Center: Chat (The Stream)
-            with Vertical(id="center-stage"):
+            # Center: Tabbed Editor
+            with Vertical(id="editor-panel"):
+                yield TabbedEditor()
+
+            # Right: Chat + Controls
+            with Vertical(id="chat-panel"):
+                yield ProtocolDeck()
                 yield NeuralStream()
                 with Container(id="input-container"):
                     yield ChatInput(id="chat-input", show_line_numbers=False)
-
-            # Right: Protocols (The Controls)
-            with Vertical(id="sidebar-right"):
-                yield ProtocolDeck()
 
         yield StatusBar()
         yield Footer()
@@ -1865,13 +2111,13 @@ class SovwrenIDE(App):
 
             if button_id == "lens-blue":
                 self.session_lens = "Blue"
-                stream.add_message("[dim]Lens: Blue (Opaque) - Grounded mode[/dim]", "system")
+                stream.add_message("[dim]🔵 Grounded[/dim]", "system")
             elif button_id == "lens-red":
                 self.session_lens = "Red"
-                stream.add_message("[dim]Lens: Red (Cracked) - Processing mode[/dim]", "system")
+                stream.add_message("[dim]🔴 Processing[/dim]", "system")
             elif button_id == "lens-purple":
                 self.session_lens = "Purple"
-                stream.add_message("[dim]Lens: Purple (Prismatic) - Symbolic mode[/dim]", "system")
+                stream.add_message("[dim]🟣 Symbolic[/dim]", "system")
 
         # Mode buttons
         elif button_id in ("mode-workshop", "mode-sanctuary"):
@@ -1885,12 +2131,12 @@ class SovwrenIDE(App):
                 self.remove_class("mode-sanctuary")
                 self.add_class("mode-workshop")
                 self.session_mode = "Workshop"
-                stream.add_message("[dim]Mode: Workshop - Analysis and building[/dim]", "system")
+                stream.add_message("[dim]🛠 Workshop[/dim]", "system")
             elif button_id == "mode-sanctuary":
                 self.remove_class("mode-workshop")
                 self.add_class("mode-sanctuary")
                 self.session_mode = "Sanctuary"
-                stream.add_message("[dim]Mode: Sanctuary - Rest and reflection[/dim]", "system")
+                stream.add_message("[dim]🕯 Sanctuary[/dim]", "system")
 
         # Protocol buttons
         elif button_id == "btn-bookmark":
@@ -1902,77 +2148,61 @@ class SovwrenIDE(App):
         elif button_id == "btn-profiles":
             self.action_profiles()
 
+        # Editor buttons
+        elif button_id == "btn-save":
+            self.action_save_file()
+        elif button_id == "btn-close-tab":
+            await self.action_close_tab()
+
     async def on_directory_tree_file_selected(self, event) -> None:
         """Handle file selection in the workspace tree.
 
-        Design principle: 'Sovwren doesn't open files. Files open Sovwren behaviors.'
-        - Preview file content
-        - Add to context
-        - Show mode/lens suggestion (non-forcing)
+        Opens the file in the tabbed editor for editing.
+        Also notifies the chat stream and shows mode/lens suggestions.
         """
         from config import get_file_suggestion
 
         file_path = str(event.path)
         self.selected_file = file_path
-        stream = self.query_one(NeuralStream)
 
         # Check if it's actually a file (not directory)
         if not event.path.is_file():
             return
 
+        # Open in tabbed editor
         try:
-            # Read file content for preview
-            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
+            editor = self.query_one(TabbedEditor)
+            await editor.open_file(file_path)
+        except Exception as e:
+            self.notify(f"Cannot open file: {e}", severity="error")
+            return
 
-            # Truncate for preview (first 50 lines or 2000 chars)
-            lines = content.split('\n')
-            preview_lines = lines[:50]
-            preview = '\n'.join(preview_lines)
-            if len(preview) > 2000:
-                preview = preview[:2000] + "\n... [truncated]"
-            elif len(lines) > 50:
-                preview += "\n... [truncated]"
+        # Get relative path for display
+        rel_path = event.path.name
 
-            # Get relative path for display
-            rel_path = event.path.name
-
-            # Show file loaded message
-            stream.add_message(f"[cyan]📄 Loaded: {rel_path}[/cyan]", "system")
-
-            # Show preview (collapsed format)
-            stream.add_message(f"[dim]Preview ({len(lines)} lines):[/dim]", "system")
-            stream.add_message(f"[dim]{preview[:500]}{'...' if len(preview) > 500 else ''}[/dim]", "system")
-
-            # Update context display
-            context_widget = self.query_one("#context-status", Static)
-            context_widget.update(f"[green]📄 {rel_path}[/green]")
+        # Notify chat stream
+        try:
+            stream = self.query_one(NeuralStream)
+            stream.add_message(f"[cyan]📄 Opened: {rel_path}[/cyan]", "system")
 
             # Check for mode/lens suggestion
             suggestion = get_file_suggestion(file_path)
             if suggestion:
                 hint = suggestion.get('hint', '')
-                suggested_mode = suggestion.get('mode')
-                suggested_lens = suggestion.get('lens')
+                if hint:
+                    stream.add_message(f"[dim]💡 {hint}[/dim]", "system")
+        except Exception:
+            pass
 
-                # Show suggestion (non-forcing)
-                suggestion_parts = []
-                if suggested_mode:
-                    suggestion_parts.append(suggested_mode)
-                if suggested_lens:
-                    suggestion_parts.append(suggested_lens)
+        # Update context display
+        try:
+            context_widget = self.query_one("#context-status", Static)
+            context_widget.update(f"[green]📄 {rel_path}[/green]")
+        except Exception:
+            pass
 
-                if suggestion_parts:
-                    stream.add_message(
-                        f"[dim]💡 {hint}[/dim]",
-                        "system"
-                    )
-
-            # Log the file access
-            await self._log_event("file_opened", {"path": file_path, "lines": len(lines)})
-
-        except Exception as e:
-            stream.add_message(f"[red]Cannot read file: {e}[/red]", "error")
+        # Log the file access
+        await self._log_event("file_opened", {"path": file_path})
 
     def action_open_external(self) -> None:
         """Open the selected file in the system's default editor."""
@@ -1999,6 +2229,22 @@ class SovwrenIDE(App):
 
         except Exception as e:
             stream.add_message(f"[red]Cannot open file: {e}[/red]", "error")
+
+    def action_save_file(self) -> None:
+        """Save the current file in the editor (Ctrl+S)."""
+        try:
+            editor = self.query_one(TabbedEditor)
+            editor.save_current()
+        except Exception as e:
+            self.notify(f"Save failed: {e}", severity="error")
+
+    async def action_close_tab(self) -> None:
+        """Close the current tab in the editor (Ctrl+W)."""
+        try:
+            editor = self.query_one(TabbedEditor)
+            await editor.close_file()
+        except Exception as e:
+            self.notify(f"Close failed: {e}", severity="error")
 
     async def initiate_bookmark_weave(self) -> None:
         """Prepare and open the bookmark weaving modal with Auto-Loom drafting."""

@@ -1,4 +1,12 @@
-# Sovwren Framework
+<p align="center">
+  <img src="Media/Sovwren_Logo_2.jpg" alt="Sovwren" width="500">
+</p>
+
+<p align="center">
+  <em>When continuity matters and optimization isn't enough.</em>
+</p>
+
+---
 
 This repository centers a plain-language framework for sustainable human–AI collaboration under memory asymmetry.
 
