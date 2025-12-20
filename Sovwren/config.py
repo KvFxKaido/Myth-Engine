@@ -23,6 +23,16 @@ DEFAULT_MODEL = os.environ.get("OLLAMA_DEFAULT_MODEL", "NeMo")
 LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
 LMSTUDIO_DEFAULT_MODEL = os.environ.get("LMSTUDIO_DEFAULT_MODEL", "")
 
+# Search Gate settings (Friction Class VI)
+# API keys for external search providers
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# Future providers can be added here:
+# TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+# SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
+
+# Search Gate default state: Local-only (web disabled by default)
+SEARCH_GATE_DEFAULT = os.environ.get("SOVWREN_SEARCH_GATE", "local")  # "local" or "web"
+
 # Timeout settings (in seconds)
 TIMEOUTS = {
     "embedding_generation": 60,
@@ -30,7 +40,8 @@ TIMEOUTS = {
     "context_building": 60,
     "ollama_response": 300,  # 5 minutes
     "llm_response": 300,  # Generic LLM response timeout (5 minutes)
-    "web_scraping": 45
+    "web_scraping": 45,
+    "search_gate": 30  # External search via Search Gate (Friction Class VI)
 }
 
 # RAG settings

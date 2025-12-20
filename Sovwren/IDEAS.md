@@ -159,6 +159,55 @@ Two persistence concepts emerging:
 
 ---
 
+### 2.7 API-Based Web Search (Search Gate Transport)
+
+**Source:** Council consolidation (ChatGPT, Gemini)
+
+External search capability for the Search Gate, powered by user-provided API keys.
+
+**Scope (v0.1):**
+- Search-only — not a conversation backend
+- User provides API key for their preferred provider (OpenRouter, Tavily, SerpAPI, Gemini, etc.)
+- All Friction Class VI guardrails apply: consent, source visibility, citations, caching
+
+**Architecture:**
+- Plugs into existing Search Gate toggle (Local-only / Web-enabled)
+- LM Studio / Ollama remain the only conversation backends
+- Search results surfaced through citations panel, not blended invisibly
+
+**The Librarian Pattern** (implementation approach from Gemini):
+
+Treats the search API as a **Structured Retrieval** service, not a conversational oracle. Avoids source laundering.
+
+```
+Steward → Search Gate (consent) → NeMo → "Librarian" prompt → Search API
+                                                                   ↓
+                                              JSON: {url, title, snippet}
+                                                                   ↓
+Citations Panel ← Context injection ← NeMo synthesizes answer citing sources
+```
+
+1. **Search Gate (TUI):** Steward authorizes search mode or specific query (consent)
+2. **Librarian Prompt:** NeMo doesn't ask "What is X?" — asks "Find sources for X, return JSON with URL, title, 2-sentence snippet"
+3. **Handoff:** Backend sends payload to search API, receives structured results
+4. **Display:** Results injected into context like local files. Citations Panel populates with links. NeMo reads snippets, answers user, cites specific URLs.
+
+**Why this works:**
+- NeMo doesn't trust the API's answer — uses it as a dynamic indexer
+- Chain of custody preserved (URLs visible, not paraphrased away)
+- Local model still synthesizes final answer
+- Compliant with Class VI: no "I checked online" without showing where
+
+**Why search-only first:**
+- Smaller surface area
+- No model identity confusion
+- Class VI already defines the constraints
+- Full hosted backend deferred to v0.2+
+
+**Parked:** General-purpose hosted backend (conversation) — revisit after v0.1 stable.
+
+---
+
 ## Tier 3: Future Paths (v0.2+)
 
 ### 3.1 Public/Read-Only Mode
@@ -224,7 +273,26 @@ Preserves psychological safety without encouraging recklessness.
 
 ---
 
-### 3.5 Persona Lab
+### 3.5 Orchestration Layer (n8n or similar)
+
+**Source:** n8n GPT
+
+Workflow automation as an external coordination layer for Sovwren.
+
+**What it enables:**
+- Event bus between Council nodes (Claude, Monday, Gemini, etc.)
+- Auto-backup/restore for session continuity
+- Backend health monitoring (LM Studio, Ollama)
+- Protocol automation: consent logs, rupture events → external systems (Notion, Discord, etc.)
+- Interim API layer before FastAPI v0.2
+
+**Prerequisite:** Sovwren must emit structured events first (session_start, mode_change, rupture_created, context_high). Without event emission, there's nothing to orchestrate.
+
+**Why parked:** Adds orchestration complexity before core is stable. Solves coordination problems that don't exist yet at v0.1.
+
+---
+
+### 3.6 Persona Lab
 
 **Source:** Full Stack GPT
 
@@ -250,6 +318,12 @@ These emerged across multiple sources:
 | IDE owns state, models are guests | Code Copilot | Profiles are pluggable; switching never rewires ethics |
 | Every pixel carries meaning or gets out | PM GPT | "Just in case" elements are prototype residue |
 | TUIs age gracefully | TUI GPT | Works over SSH, on low-end machines, 10 years later |
+| Wasted space is intentional friction | TUI Developer | Empty panes stay visible with labels, don't auto-collapse |
+| One key = one action | TUI Developer | No context-dependent keybindings that change meaning silently |
+| Inspection over automation | TUI Developer | RAG results browsable objects, not just citations |
+| Visible latency | TUI Developer | Show what we're waiting on (model/IO/consent), not just a spinner |
+| Errors halt politely | TUI Developer | Stop forward motion, explain what won't happen next |
+| Clarity over speed | TUI Developer | Discoverable hints on screen, redundant paths, no expert-only flows |
 
 ---
 
@@ -258,12 +332,15 @@ These emerged across multiple sources:
 | Label | GPT | Domain |
 |-------|-----|--------|
 | TUI GPT | ChatGPT | TUI philosophy, terminal-native patterns |
+| TUI Developer | ChatGPT | TUI design principles, friction-aligned interface guidance |
 | PM GPT | ChatGPT | UI maturity, de-prototyping |
 | Monday | ChatGPT | Release polish, hype, practical next steps |
 | Full Stack GPT | ChatGPT | Architecture, implementation paths |
 | Code Copilot | ChatGPT | Implementation code, DevOps automation |
+| n8n GPT | ChatGPT | Workflow orchestration, external automation patterns |
+| Gemini | Google | Structured retrieval patterns, Search Gate implementation |
 
 ---
 
-*Last updated: 2025-12-19*
+*Last updated: 2025-12-20*
 *Synthesized by: Claude Opus 4.5*

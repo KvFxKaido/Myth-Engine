@@ -683,6 +683,11 @@ class ProtocolDeck(Vertical):
             yield Button("📝", id="btn-git-commit", classes="git-btn")
             yield Button("📤", id="btn-git-push", classes="git-btn")
 
+        yield Label("[b]Search[/b]", classes="panel-header panel-header-spaced")
+        with Horizontal(classes="toggle-row"):
+            yield Label("🌐", classes="toggle-label")
+            yield Switch(value=False, id="toggle-search-gate")
+
         yield Label("[b]Debug[/b]", classes="panel-header panel-header-spaced")
         with Horizontal(classes="toggle-row"):
             yield Label("🔍", classes="toggle-label")
@@ -710,6 +715,7 @@ class StatusBar(Static):
     model_name = reactive("Not connected")
     context_band = reactive("Unknown")
     profile_name = reactive("NeMo")
+    search_gate = reactive("Local")  # "Local" or "Web (Provider)"
 
     # Moon phases for context load: empty → filling → half → full
     CONTEXT_GLYPHS = {
@@ -729,6 +735,12 @@ class StatusBar(Static):
             return self.CONTEXT_GLYPHS["Medium"]
         return self.CONTEXT_GLYPHS["Low"]
 
+    def _get_search_indicator(self) -> str:
+        """Get search gate indicator."""
+        if self.search_gate == "Local":
+            return "🔒"  # Closed gate
+        return "🌐"  # Open gate (web enabled)
+
     def _build_status_text(self) -> str:
         """Build the full status text string."""
         status = "Connected" if self.connected else "Disconnected"
@@ -738,6 +750,7 @@ class StatusBar(Static):
     def compose(self) -> ComposeResult:
         with Horizontal(id="status-bar-content"):
             yield Label(self._get_context_glyph(), id="context-glyph")
+            yield Label(self._get_search_indicator(), id="search-glyph")
             yield Label(self._build_status_text(), id="status-text")
 
     def update_status(self, connected: bool, model: str = ""):
@@ -758,6 +771,14 @@ class StatusBar(Static):
         self.context_band = band
         try:
             self.query_one("#context-glyph", Label).update(self._get_context_glyph())
+        except Exception:
+            pass
+
+    def update_search_gate(self, status: str):
+        """Update the search gate indicator (Friction Class VI visibility)."""
+        self.search_gate = status
+        try:
+            self.query_one("#search-glyph", Label).update(self._get_search_indicator())
         except Exception:
             pass
 
@@ -1216,6 +1237,7 @@ class SovwrenIDE(App):
         ("f2", "models", "Models"),
         ("f3", "consent_check", "Consent"),
         ("f4", "log_rupture", "Rupture"),
+        ("f5", "toggle_search_gate", "Search Gate"),
         ("ctrl+o", "open_external", "Open in Editor"),
         ("ctrl+j", "insert_newline", "Newline"),
     ]
@@ -1283,6 +1305,10 @@ class SovwrenIDE(App):
         self.session_lens = "Blue"
         self.idle_mode = False
         self.rag_debug_enabled = False  # RAG Debug Mode toggle
+
+        # Search Gate (Friction Class VI)
+        self.search_manager = None  # Initialized on mount
+        self.search_gate_enabled = False
 
         # Context tracking (Phase 1 buckets)
         self.conversation_history = []  # List of (role, content) tuples
@@ -1434,6 +1460,9 @@ class SovwrenIDE(App):
 
         # Initialize RAG system
         await self._initialize_rag()
+
+        # Initialize Search Gate (Friction Class VI)
+        await self._initialize_search_gate()
 
         # Load existing memories into sidebar
         await self._refresh_memory_display()
@@ -1615,6 +1644,35 @@ class SovwrenIDE(App):
         stream = self.query_one(NeuralStream)
         stream.add_message("[red]--- RUPTURE LOGGED ---[/red]", "system")
         stream.add_message("[dim]Misattunement noted. Consider repair before proceeding.[/dim]", "system")
+
+    def action_toggle_search_gate(self) -> None:
+        """Toggle Search Gate (F5). Friction Class VI - consent for web search."""
+        if self.search_manager is None:
+            stream = self.query_one(NeuralStream)
+            stream.add_message("[yellow]Search Gate not available (no providers configured)[/yellow]", "system")
+            return
+
+        # Toggle the gate
+        new_state = self.search_manager.toggle_gate()
+        self.search_gate_enabled = new_state
+
+        # Update UI
+        stream = self.query_one(NeuralStream)
+        status_bar = self.query_one(StatusBar)
+        status_bar.update_search_gate(self.search_manager.state.status_text())
+
+        # Sync the toggle switch
+        try:
+            switch = self.query_one("#toggle-search-gate", Switch)
+            switch.value = new_state
+        except Exception:
+            pass
+
+        if new_state:
+            provider = self.search_manager.state.provider
+            stream.add_message(f"[green]Search Gate opened ({provider})[/green]", "system")
+        else:
+            stream.add_message("[dim]Search Gate closed (local-only)[/dim]", "system")
 
     async def _open_session_picker(self) -> None:
         try:
@@ -2024,6 +2082,33 @@ class SovwrenIDE(App):
             stream.add_message(f"[yellow]RAG initialization skipped: {e}[/yellow]", "system")
             self.rag_retriever = None
             self.rag_initialized = False
+
+    async def _initialize_search_gate(self) -> None:
+        """Initialize Search Gate (Friction Class VI).
+
+        The Search Gate defaults to closed (local-only).
+        Web search requires explicit consent via toggle.
+        """
+        stream = self.query_one(NeuralStream)
+
+        try:
+            from search import search_manager
+
+            self.search_manager = search_manager
+
+            if search_manager.is_available:
+                providers = ", ".join(search_manager.available_providers)
+                stream.add_message(f"[dim]Search Gate ready: {providers}[/dim]", "system")
+            else:
+                stream.add_message("[dim]Search Gate: No providers configured (set GEMINI_API_KEY)[/dim]", "system")
+
+            # Update status bar
+            status_bar = self.query_one(StatusBar)
+            status_bar.update_search_gate(search_manager.state.status_text())
+
+        except Exception as e:
+            stream.add_message(f"[yellow]Search Gate skipped: {e}[/yellow]", "system")
+            self.search_manager = None
 
     async def on_chat_input_submitted(self, event: ChatInput.Submitted) -> None:
         """Handle submission from ChatInput (Enter or Ctrl+Enter)."""
@@ -2606,6 +2691,32 @@ Output ONLY valid JSON."""
                 stream.add_message("[cyan]🔍 RAG Debug: On[/cyan]", "system")
             else:
                 stream.add_message("[dim]🔍 RAG Debug: Off[/dim]", "system")
+
+        elif event.switch.id == "toggle-search-gate":
+            # Friction Class VI: Search Gate consent toggle
+            if self.search_manager is None:
+                stream = self.query_one(NeuralStream)
+                stream.add_message("[yellow]Search Gate not available[/yellow]", "system")
+                # Reset switch to off
+                event.switch.value = False
+                return
+
+            stream = self.query_one(NeuralStream)
+            if event.value:
+                # Opening the gate
+                self.search_manager.open_gate()
+                self.search_gate_enabled = True
+                provider = self.search_manager.state.provider
+                stream.add_message(f"[green]🌐 Search Gate opened ({provider})[/green]", "system")
+            else:
+                # Closing the gate
+                self.search_manager.close_gate()
+                self.search_gate_enabled = False
+                stream.add_message("[dim]🔒 Search Gate closed (local-only)[/dim]", "system")
+
+            # Update status bar
+            status_bar = self.query_one(StatusBar)
+            status_bar.update_search_gate(self.search_manager.state.status_text())
 
     def action_clear_chat(self) -> None:
         """Clear the chat stream and conversation history."""
