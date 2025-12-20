@@ -7,14 +7,6 @@ import { Settings } from 'lucide-react';
 function App() {
   const [currentModel, setCurrentModel] = useState('gemini');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [apiKeys, setApiKeys] = useState({});
-
-  useEffect(() => {
-    const savedKeys = localStorage.getItem('sovwren_api_keys');
-    if (savedKeys) {
-      setApiKeys(JSON.parse(savedKeys));
-    }
-  }, [isSettingsOpen]); // Reload keys when settings close
 
   return (
     <div className="flex flex-col h-screen bg-[#0f0f0f] text-gray-100 font-sans selection:bg-purple-500/30">
@@ -44,7 +36,7 @@ function App() {
       {/* Main Content */}
       <main className="flex-1 overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-[#0f0f0f] to-[#0f0f0f] pointer-events-none" />
-        <ChatInterface currentModel={currentModel} apiKeys={apiKeys} />
+        <ChatInterface currentModel={currentModel} />
       </main>
 
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />

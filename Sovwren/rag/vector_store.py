@@ -2,8 +2,8 @@
 import asyncio
 import faiss
 import numpy as np
-import pickle
 import os
+import json
 from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 import time
@@ -32,10 +32,20 @@ class VectorStore:
     async def _load_or_create_index(self):
         """Load existing index or create new one"""
         index_file = f"{self.index_path}.index"
-        map_file = f"{self.index_path}.map"
+        map_file_json = f"{self.index_path}.map.json"
         
-        if os.path.exists(index_file) and os.path.exists(map_file):
-            await self._load_index(index_file, map_file)
+        # Security: do not load pickle maps. If an old `.map` exists, rebuild.
+        legacy_pickle_map = f"{self.index_path}.map"
+        if os.path.exists(legacy_pickle_map) and not os.path.exists(map_file_json):
+            print(
+                "Warning: Found legacy pickle map file; refusing to load it for safety. "
+                "Rebuilding vector index."
+            )
+            await self._create_new_index()
+            return
+
+        if os.path.exists(index_file) and os.path.exists(map_file_json):
+            await self._load_index(index_file, map_file_json)
         else:
             await self._create_new_index()
 
@@ -49,9 +59,10 @@ class VectorStore:
                 None, faiss.read_index, index_file
             )
             
-            # Load document map
-            with open(map_file, 'rb') as f:
-                self.document_map = pickle.load(f)
+            # Load document map (JSON; safe to parse)
+            with open(map_file, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+                self.document_map = {int(k): v for k, v in raw.items()}
             
             self.dimension = self.index.d
             print(f"Loaded vector index with {self.index.ntotal} vectors")
@@ -86,7 +97,12 @@ class VectorStore:
             embeddings = await embedding_manager.encode_text(texts)
             
             # Normalize embeddings for cosine similarity
-            embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            zero_mask = norms == 0
+            if np.any(zero_mask):
+                norms = np.where(zero_mask, 1.0, norms)
+                print(f"Warning: {int(np.sum(zero_mask))} zero-norm embedding(s); skipping normalization for those rows")
+            embeddings = embeddings / norms
             
             # Add to index
             start_idx = self.index.ntotal
@@ -143,7 +159,11 @@ class VectorStore:
         try:
             # Generate query embedding
             query_embedding = await embedding_manager.encode_text([query])
-            query_embedding = query_embedding / np.linalg.norm(query_embedding)
+            q_norm = np.linalg.norm(query_embedding)
+            if q_norm == 0:
+                print("Warning: zero-norm query embedding; returning no results")
+                return []
+            query_embedding = query_embedding / q_norm
             
             # Search in FAISS index
             loop = asyncio.get_event_loop()
@@ -200,7 +220,7 @@ class VectorStore:
             Path(self.index_path).parent.mkdir(parents=True, exist_ok=True)
             
             index_file = f"{self.index_path}.index"
-            map_file = f"{self.index_path}.map"
+            map_file = f"{self.index_path}.map.json"
             
             # Save index
             loop = asyncio.get_event_loop()
@@ -209,8 +229,8 @@ class VectorStore:
             )
             
             # Save document map
-            with open(map_file, 'wb') as f:
-                pickle.dump(self.document_map, f)
+            with open(map_file, 'w', encoding='utf-8') as f:
+                json.dump({str(k): v for k, v in self.document_map.items()}, f, ensure_ascii=False, indent=2)
             
             print(f"Saved vector index with {self.index.ntotal} vectors")
             

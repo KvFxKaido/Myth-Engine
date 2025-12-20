@@ -112,19 +112,37 @@ class RAGRetriever:
         
         return [chunk for chunk in chunks if chunk.strip()]
 
-    async def retrieve_context(self, query: str, session_id: str = None) -> str:
-        """Retrieve relevant context for a query"""
+    async def retrieve_context(self, query: str, session_id: str = None,
+                               debug: bool = False):
+        """Retrieve relevant context for a query.
+
+        If debug=True, returns (context, debug_info) tuple.
+        Otherwise returns just the context string.
+        """
         await self.initialize()
-        
+
         start_time = time.time()
-        
+        debug_info = {} if debug else None
+
         try:
             # Get relevant chunks from vector search
+            search_start = time.time()
             search_results = await vector_store.search(
                 query=query,
                 k=MAX_RETRIEVED_CHUNKS
             )
-            
+            search_time = time.time() - search_start
+
+            if debug:
+                debug_info['search_time_ms'] = round(search_time * 1000, 1)
+                debug_info['chunks_found'] = len(search_results)
+                debug_info['sources'] = []
+                debug_info['scores'] = []
+                for text, similarity, metadata in search_results:
+                    title = metadata.get('title', metadata.get('url', 'Unknown'))
+                    debug_info['sources'].append(title)
+                    debug_info['scores'].append(round(similarity, 3))
+
             # Get recent conversation context if session provided
             conversation_context = ""
             if session_id:
@@ -134,30 +152,39 @@ class RAGRetriever:
                 )
                 if recent_conversations:
                     conversation_context = self._format_conversation_context(recent_conversations)
-            
+
             # Build context from search results
             document_context = self._format_document_context(search_results)
-            
+
             # Combine contexts
             full_context = ""
             if conversation_context:
                 full_context += f"Recent conversation:\n{conversation_context}\n\n"
-            
+
             if document_context:
                 full_context += f"Relevant information:\n{document_context}"
-            
+
             # Trim context to max length
             if len(full_context) > MAX_CONTEXT_LENGTH:
                 full_context = full_context[:MAX_CONTEXT_LENGTH] + "..."
-            
+
             elapsed = time.time() - start_time
             if elapsed > TIMEOUTS["context_building"]:
                 print(f"Warning: Context building took {elapsed:.2f}s")
-            
+
+            if debug:
+                debug_info['total_time_ms'] = round(elapsed * 1000, 1)
+                debug_info['context_chars'] = len(full_context)
+                debug_info['has_conversation'] = bool(conversation_context)
+                debug_info['has_documents'] = bool(document_context)
+                return full_context, debug_info
+
             return full_context
-            
+
         except Exception as e:
             print(f"Error retrieving context: {e}")
+            if debug:
+                return "", {'error': str(e)}
             return ""
 
     def _format_conversation_context(self, conversations: List[Dict]) -> str:

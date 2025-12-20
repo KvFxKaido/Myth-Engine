@@ -1,4 +1,4 @@
-"""Simple calendar/reminder system for Jarvis"""
+"""Simple calendar/reminder system for Sovwren"""
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import aiosqlite

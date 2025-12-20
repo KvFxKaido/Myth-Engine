@@ -83,29 +83,16 @@ See: [FRICTION-SPEC.md#v01-exit-criteria](FRICTION-SPEC.md#v01-exit-criteria)
 
 ## Tier 2: Architectural Unlocks
 
-### 2.1 Profile System (Finish the Loop)
+### ~~2.1 Profile System (Finish the Loop)~~ ✅
 
-**Source:** Full Stack GPT, Code Copilot
+**Status:** Implemented.
 
-80% done, just needs wiring. Code Copilot provided full implementation.
-
-**Components:**
-- `profiles/*.json` — Schema: id, name, system_prompt.base, modifiers (mode/lens/idleness), gen params
-- `sovwren/profiles.py` — Loader, validator, prompt builder, ProfileManager
-- Three starters: `nemo.json`, `oracle.json`, `minimal.json`
-
-**Key decisions baked in:**
-- IDE owns state, models are guests
-- State shapes *how*, never narrates *what*
-- Node boundaries enforced
-- Profile switch logs as `state_changed` event
-
-**TUI integration:**
-- Display `[NeMo]` in status bar
-- `:profile` palette command for switching
-- Splash repaint on change
-
-**Reference:** See Code Copilot dump for full implementation code.
+- `profiles/*.json` — nemo.json, oracle.json, minimal.json
+- Profile loader in config.py with caching
+- `[NeMo]` displayed in status bar (Rich-escaped brackets)
+- F1 keybind for profile switching
+- Splash repaint on profile change
+- Profile preference persisted to DB
 
 ---
 
@@ -137,56 +124,38 @@ Two persistence concepts emerging:
 
 ---
 
-### 2.4 Onboarding Script (Release Polish)
+### ~~2.4 Onboarding Script (Release Polish)~~ ✅
 
-**Source:** Monday
+**Status:** Implemented.
 
-`bash ./run-sovwren.sh` that:
-- Installs dependencies
-- Boots LM Studio if not running
-- Launches the TUI
-- Welcomes gently
-
-Friction reduction for first-run.
+- `run-sovwren.sh` (Unix) + `run-sovwren.bat` (Windows)
+- Creates venv if missing, installs dependencies
+- Checks LM Studio connection, prompts if not running
+- Launches sovwren_ide.py
+- `textual>=0.40.0` added to requirements.txt
 
 ---
 
-### 2.5 Release Workflow (DevOps)
+### ~~2.5 Release Workflow (DevOps)~~ ✅
 
-**Source:** Code Copilot
+**Status:** Implemented.
 
-`.github/workflows/release.yml`:
+- `.github/workflows/release.yml`
 - Triggers on `release: published`
-- Creates `sovwren-${tag}.zip` (Sovwren + profiles + README + LICENSE)
-- Smoke test via `compileall`
+- Smoke tests: py_compile + import checks
+- Creates `sovwren-${tag}.zip` (clean, no __pycache__)
 - Generates `SHA256SUMS.txt`
 - Auto-attaches to GitHub Release
 
-**Reference:** See Code Copilot dump for full YAML.
-
 ---
 
-### 2.6 Issue Templates (DevOps)
+### ~~2.6 Issue Templates (DevOps)~~ ✅
 
-**Source:** Code Copilot
+**Status:** Implemented.
 
-Structured feedback routing:
-
-**Bug report:**
-- Friction class dropdown (I-V)
-- Version, steps to reproduce
-- Session state checkboxes (Workshop/Sanctuary/Idle/Lens)
-
-**Feature request:**
-- Tied to friction removal, not wishlist
-- Acceptance criteria
-- Explicit non-goals
-
-**config.yml:**
-- Disable blank issues
-- Link to release notes
-
-**Reference:** See Code Copilot dump for full YAML.
+- `bug_report.yml` — Friction class (I-V), backend, model, OS, session state, context band
+- `feature_request.yml` — Friction removal focus, acceptance criteria, non-goals, tier suggestion
+- `config.yml` — Blank issues disabled, links to docs/releases/IDEAS.md
 
 ---
 
@@ -296,5 +265,5 @@ These emerged across multiple sources:
 
 ---
 
-*Last updated: 2025-12-16*
+*Last updated: 2025-12-19*
 *Synthesized by: Claude Opus 4.5*

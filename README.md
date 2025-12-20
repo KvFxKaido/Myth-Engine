@@ -73,6 +73,21 @@ pip install -r requirements.txt
 python sovwren_ide.py
 ```
 
+## Web UI (Optional)
+
+The `Sovwren/` web UI proxies through a local FastAPI backend so API keys are not stored in browser storage.
+
+```bash
+# Terminal 1 (backend)
+cd Sovwren/Sovwren
+python -m uvicorn web_api:app --host 127.0.0.1 --port 8000
+
+# Terminal 2 (frontend)
+cd Sovwren/Sovwren
+npm install
+npm run dev
+```
+
 ### LLM Backend
 
 The IDE connects to a local LLM. Start one of:

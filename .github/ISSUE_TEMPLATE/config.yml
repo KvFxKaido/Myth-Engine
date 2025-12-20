@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/ishaw2/Sovwren/blob/main/README.md
+    about: Read the README and framework documentation
+  - name: Release Notes
+    url: https://github.com/ishaw2/Sovwren/releases
+    about: Check the latest release notes for known issues and changes
+  - name: IDEAS.md
+    url: https://github.com/ishaw2/Sovwren/blob/main/Sovwren/IDEAS.md
+    about: View the roadmap and planned features

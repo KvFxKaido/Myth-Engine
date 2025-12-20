@@ -16,6 +16,7 @@ from datetime import datetime
 
 from .retriever import rag_retriever
 from .vector_store import vector_store
+from core.workspace_paths import find_repo_root
 
 
 class LocalIngester:
@@ -48,7 +49,7 @@ class LocalIngester:
     MIN_CONTENT_LENGTH = 100
 
     def __init__(self, workspace_root: str = None):
-        self.workspace_root = Path(workspace_root or "C:\\Users\\ishaw\\OneDrive\\Documents\\Sovwren")
+        self.workspace_root = Path(workspace_root) if workspace_root else find_repo_root(Path(__file__))
         self.ingested_files: Set[str] = set()
         self.stats = {
             "files_scanned": 0,

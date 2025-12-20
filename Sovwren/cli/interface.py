@@ -14,8 +14,6 @@ from scraper.web_scraper import web_scraper
 from core.database import db
 from core.calendar import calendar
 from core.session_manager import session_manager
-from mcp_gateway.client import mcp_client
-from mcp_gateway.agent import mcp_agent
 
 class NeMoCLI:
     def __init__(self):
@@ -60,16 +58,6 @@ class NeMoCLI:
             else:
                 # Create new session - use the ID returned by session_manager
                 self.session_id = await session_manager.create_session(self.llm_provider)
-
-            # Initialize MCP client
-            theme.print_status("Connecting to MCP servers...", "info")
-            mcp_success = await mcp_client.initialize()
-            if mcp_success:
-                servers = await mcp_client.list_servers()
-                if servers:
-                    theme.print_success(f"Connected to {len(servers)} MCP server(s): {', '.join(servers)}")
-                else:
-                    theme.print_warning("No MCP servers connected (check mcp_gateway/client_config.json)")
 
             # Discover available models using the configured LLM client
             models = await self.llm_client.discover_models()
@@ -130,7 +118,7 @@ class NeMoCLI:
         await self.cleanup()
 
     async def handle_chat_message(self, message: str):
-        """Handle regular chat messages with intelligent MCP tool usage"""
+        """Handle regular chat messages"""
         try:
             # Check for natural language calendar requests
             if await self._try_parse_calendar_request(message):
@@ -140,30 +128,10 @@ class NeMoCLI:
             with theme.show_progress("Analyzing request...") as progress:
                 task = progress.add_task("", total=None)
 
-                # First, check if MCP tools should be used
-                progress.update(task, description="Checking for tool needs...")
-                agent_result = await mcp_agent.process_request(message)
-
-                # If tools were used, show results
-                if agent_result.get("tool_results"):
-                    theme.print_status("🔧 Tools Used:", "info")
-                    for tool_result in agent_result["tool_results"]:
-                        status = "✓" if tool_result["success"] else "✗"
-                        theme.console.print(
-                            f"  {status} {tool_result['server']}/{tool_result['tool']}"
-                        )
+                progress.update(task, description="Gathering context...")
 
                 # Get context from RAG
-                progress.update(task, description="Gathering context...")
                 context = await rag_retriever.retrieve_context(message, self.session_id)
-
-                # Add tool results to context if available
-                if agent_result.get("tool_results"):
-                    tool_context = "\n\nTool Results:\n"
-                    for tr in agent_result["tool_results"]:
-                        if tr["success"] and tr.get("result"):
-                            tool_context += f"- {tr['server']}/{tr['tool']}: {tr['result'][:200]}\n"
-                    context = tool_context + "\n" + context
 
                 progress.update(task, description="Generating response...")
 
@@ -179,14 +147,12 @@ class NeMoCLI:
                 # Display response
                 theme.print_response(response)
 
-                # Store conversation with tool info
-                tool_summary = agent_result.get("summary", "No tools used")
                 await db.add_conversation(
                     session_id=self.session_id,
                     user_message=message,
                     ai_response=response,
                     model_used=self.llm_client.current_model,
-                    context_used=f"Tools: {tool_summary}\n{context[:500]}"
+                    context_used=context[:500]
                 )
 
                 # Add to local history
@@ -194,7 +160,7 @@ class NeMoCLI:
                     'user': message,
                     'assistant': response,
                     'model': self.llm_client.current_model,
-                    'tools_used': agent_result.get("summary", "")
+                    'tools_used': ''
                 })
 
                 # Update session metadata
@@ -270,15 +236,9 @@ class NeMoCLI:
         theme.print_status("Cleaning up...", "info")
 
         try:
-            # Save MCP agent logs before cleanup
-            if mcp_agent.session_log:
-                log_file = mcp_agent.save_session_log(self.session_id)
-                theme.print_info(f"Session log saved: {log_file}")
-
             await self.llm_client.cleanup()
             await web_scraper.cleanup()
             await rag_retriever.cleanup()
-            await mcp_client.cleanup()
 
             theme.print_success("Goodbye!")
 
@@ -452,79 +412,6 @@ class NeMoCLI:
         except Exception as e:
             theme.print_error(f"Failed to complete event: {e}")
 
-    async def list_mcp_servers(self):
-        """List connected MCP servers"""
-        servers = await mcp_client.list_servers()
-        if servers:
-            theme.print_status("Connected MCP Servers:", "info")
-            for server in servers:
-                tools = await mcp_client.list_server_tools(server)
-                theme.console.print(f"  • {server} ({len(tools)} tools)")
-        else:
-            theme.print_warning("No MCP servers connected")
-            theme.print_info("Configure servers in mcp_gateway/client_config.json")
-
-    async def list_mcp_tools(self, server_name: str = None):
-        """List MCP tools"""
-        if server_name:
-            tools = await mcp_client.list_server_tools(server_name)
-            if tools:
-                theme.print_status(f"Tools from '{server_name}':", "info")
-                for tool in tools:
-                    theme.console.print(f"  • {tool['name']}")
-                    if tool.get('description'):
-                        theme.console.print(f"    {tool['description']}")
-            else:
-                theme.print_error(f"Server '{server_name}' not found")
-        else:
-            all_tools = await mcp_client.list_all_tools()
-            if all_tools:
-                theme.print_status("Available MCP Tools:", "info")
-                for server, tools in all_tools.items():
-                    theme.console.print(f"\n[{theme.get_color('accent')}]{server}[/]:")
-                    for tool in tools:
-                        theme.console.print(f"  • {tool['name']}")
-                        if tool.get('description'):
-                            theme.console.print(f"    {tool['description']}")
-            else:
-                theme.print_warning("No MCP tools available")
-
-    async def call_mcp_tool(self, server: str, tool: str, args_json: str):
-        """Call an MCP tool"""
-        try:
-            import json
-            arguments = json.loads(args_json)
-
-            theme.print_status(f"Calling {server}/{tool}...", "info")
-            result = await mcp_client.call_tool(server, tool, arguments)
-
-            theme.print_success("Tool executed successfully!")
-            theme.console.print(result)
-
-        except Exception as e:
-            theme.print_error(f"Failed to call tool: {e}")
-
-    def show_agent_report(self):
-        """Show MCP agent activity report"""
-        report = mcp_agent.generate_report(self.session_id)
-        print(report)
-
-    def save_agent_report(self):
-        """Save agent report to file"""
-        try:
-            log_file = mcp_agent.save_session_log(self.session_id)
-            theme.print_success(f"Log saved: {log_file}")
-
-            # Also save human-readable report
-            report = mcp_agent.generate_report(self.session_id)
-            report_file = log_file.parent / f"report_{log_file.stem}.txt"
-            with open(report_file, 'w') as f:
-                f.write(report)
-            theme.print_success(f"Report saved: {report_file}")
-
-        except Exception as e:
-            theme.print_error(f"Failed to save report: {e}")
-
     async def ingest_corpus(self):
         """Ingest the full Sovwren corpus into RAG"""
         from rag.local_ingester import local_ingester
@@ -663,11 +550,6 @@ class NeMoCLI:
             "/today": "Show today's events",
             "/event <date> <time> <title>": "Add calendar event",
             "/complete <id>": "Mark event as completed",
-            "/mcp-servers": "List connected MCP servers",
-            "/mcp-tools [server]": "List MCP tools (all or from specific server)",
-            "/mcp-call <srv> <tool> <json>": "Call an MCP tool",
-            "/report": "Show MCP agent activity report",
-            "/save-report": "Save activity report to file",
             "/stats": "Show system statistics",
             "/history": "Show conversation history",
             "/theme <name>": "Change CLI theme (matrix, cyberpunk, minimal)",
@@ -682,6 +564,7 @@ class NeMoCLI:
         theme.console.print("  Just chat naturally - tools are used when needed")
         theme.console.print("  Example: 'read the file /tmp/test.txt'")
         theme.console.print("  Example: 'remember that I prefer Python 3.11'")
+        theme.console.print("  Note: filesystem writes/deletes are blocked by default (set SOVWREN_MCP_WRITE_MODE=confirm)")
         theme.print_separator()
         theme.print_info("💾 Session Management:")
         theme.console.print("  /sessions           - List recent chat sessions")
@@ -699,12 +582,6 @@ class NeMoCLI:
         theme.console.print("  /month              - Current month calendar")
         theme.console.print("  /month 12           - December this year")
         theme.console.print("  /month 12 2025      - December 2025")
-        theme.print_separator()
-        theme.print_info("🔌 MCP Tools:")
-        theme.console.print("  /mcp-servers        - List connected servers")
-        theme.console.print("  /mcp-tools          - List all tools")
-        theme.console.print("  /report             - View tool usage report")
-        theme.console.print("  Configure: mcp_gateway/client_config.json")
 
     # ==================== Session Commands ====================
     

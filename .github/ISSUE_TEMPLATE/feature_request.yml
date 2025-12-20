@@ -1,0 +1,80 @@
+name: Feature Request
+description: Propose a feature that removes friction or improves the partnership experience
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sovwren features are evaluated by their friction removal, not wishlist appeal.
+
+        Before submitting, consider:
+        - Does this remove a specific friction point?
+        - Does this align with the partnership-first philosophy?
+        - Is this v0.1 scope or future work?
+
+  - type: textarea
+    id: friction
+    attributes:
+      label: What friction does this remove?
+      description: Describe the current pain point or limitation
+      placeholder: |
+        Currently, when I try to...
+        The issue is...
+        This causes friction because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should this work?
+      placeholder: "Describe your proposed solution..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How do we know when this is done?
+      placeholder: |
+        - [ ] User can...
+        - [ ] System responds with...
+        - [ ] State is preserved when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: Non-goals
+      description: What is explicitly NOT part of this feature?
+      placeholder: |
+        This feature does NOT:
+        - ...
+        - ...
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Suggested tier
+      description: Where does this fit in the IDEAS.md priority structure?
+      options:
+        - "Tier 1 - High leverage, low complexity (ship soon)"
+        - "Tier 2 - Architectural unlock (scope carefully)"
+        - "Tier 3 - Future path (park until v0.2+)"
+        - "Not sure"
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider?
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other context, mockups, or references

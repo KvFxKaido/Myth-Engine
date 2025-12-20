@@ -1,4 +1,4 @@
-"""Database operations for Jarvis AI Agent"""
+"""Database operations for Sovwren"""
 import sqlite3
 import json
 from datetime import datetime

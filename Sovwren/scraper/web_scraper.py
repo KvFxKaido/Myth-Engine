@@ -6,6 +6,9 @@ from urllib.parse import urljoin, urlparse
 import re
 from typing import Dict, List, Optional, Tuple
 import time
+import ipaddress
+import socket
+import os
 
 from config import TIMEOUTS
 from rag.retriever import rag_retriever
@@ -16,6 +19,9 @@ class WebScraper:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+        self.max_html_bytes = int(os.environ.get("SOVWREN_SCRAPER_MAX_HTML_BYTES", "2000000"))
+        self.max_redirects = int(os.environ.get("SOVWREN_SCRAPER_MAX_REDIRECTS", "3"))
+        self.allow_private_hosts = os.environ.get("SOVWREN_SCRAPER_ALLOW_PRIVATE_HOSTS", "").strip() == "1"
 
     async def _get_session(self):
         """Get or create HTTP session"""
@@ -27,17 +33,89 @@ class WebScraper:
             )
         return self.session
 
+    def _host_is_private_or_local(self, host: str) -> bool:
+        host = (host or "").strip().strip("[]")
+        if not host:
+            return True
+
+        if host.lower() in {"localhost"}:
+            return True
+
+        try:
+            ip = ipaddress.ip_address(host)
+            return bool(
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+            )
+        except ValueError:
+            # Not an IP literal; resolve and check all addresses.
+            try:
+                infos = socket.getaddrinfo(host, None)
+            except Exception:
+                return False
+
+            for info in infos:
+                try:
+                    addr = info[4][0]
+                    ip = ipaddress.ip_address(addr)
+                    if (
+                        ip.is_private
+                        or ip.is_loopback
+                        or ip.is_link_local
+                        or ip.is_reserved
+                        or ip.is_multicast
+                    ):
+                        return True
+                except Exception:
+                    continue
+            return False
+
+    def _validate_url(self, url: str) -> Optional[str]:
+        """
+        Basic SSRF guardrails:
+        - allowlist schemes: http/https
+        - block localhost + private/internal ranges by default
+        """
+        try:
+            parsed = urlparse(url)
+        except Exception:
+            return "Invalid URL"
+
+        if parsed.scheme not in {"http", "https"}:
+            return f"Blocked URL scheme: {parsed.scheme}"
+
+        if not parsed.hostname:
+            return "URL missing hostname"
+
+        if not self.allow_private_hosts and self._host_is_private_or_local(parsed.hostname):
+            return f"Blocked private/local host: {parsed.hostname}"
+
+        return None
+
     async def scrape_url(self, url: str) -> Optional[Dict[str, str]]:
         """Scrape content from a URL"""
+        reason = self._validate_url(url)
+        if reason:
+            print(f"Blocked scrape for {url}: {reason}")
+            return None
+
         try:
             session = await self._get_session()
             
-            async with session.get(url) as response:
+            async with session.get(url, allow_redirects=True, max_redirects=self.max_redirects) as response:
                 if response.status != 200:
                     print(f"HTTP {response.status} for {url}")
                     return None
                 
-                html = await response.text()
+                raw = await response.content.read(self.max_html_bytes + 1)
+                if len(raw) > self.max_html_bytes:
+                    print(f"Response too large for {url} (>{self.max_html_bytes} bytes)")
+                    return None
+
+                html = raw.decode(errors="replace")
                 return self._extract_content(html, url)
                 
         except asyncio.TimeoutError:
@@ -228,6 +306,11 @@ class WebScraper:
             
             if url in visited or depth > max_depth:
                 continue
+
+            reason = self._validate_url(url)
+            if reason:
+                print(f"Blocked scrape for {url}: {reason}")
+                continue
             
             visited.add(url)
             
@@ -240,9 +323,12 @@ class WebScraper:
             if depth < max_depth:
                 try:
                     session = await self._get_session()
-                    async with session.get(url) as response:
+                    async with session.get(url, allow_redirects=True, max_redirects=self.max_redirects) as response:
                         if response.status == 200:
-                            html = await response.text()
+                            raw = await response.content.read(self.max_html_bytes + 1)
+                            if len(raw) > self.max_html_bytes:
+                                continue
+                            html = raw.decode(errors="replace")
                             links = self.extract_links(html, url)
                             
                             # Filter links to same domain to avoid going too wide

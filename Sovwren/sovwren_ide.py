@@ -683,6 +683,11 @@ class ProtocolDeck(Vertical):
             yield Button("📝", id="btn-git-commit", classes="git-btn")
             yield Button("📤", id="btn-git-push", classes="git-btn")
 
+        yield Label("[b]Debug[/b]", classes="panel-header panel-header-spaced")
+        with Horizontal(classes="toggle-row"):
+            yield Label("🔍", classes="toggle-label")
+            yield Switch(value=False, id="toggle-rag-debug")
+
 
 class NeuralStream(ScrollableContainer):
     """The Chat Window."""
@@ -704,6 +709,7 @@ class StatusBar(Static):
     connected = reactive(False)
     model_name = reactive("Not connected")
     context_band = reactive("Unknown")
+    profile_name = reactive("NeMo")
 
     # Moon phases for context load: empty → filling → half → full
     CONTEXT_GLYPHS = {
@@ -723,17 +729,29 @@ class StatusBar(Static):
             return self.CONTEXT_GLYPHS["Medium"]
         return self.CONTEXT_GLYPHS["Low"]
 
+    def _build_status_text(self) -> str:
+        """Build the full status text string."""
+        status = "Connected" if self.connected else "Disconnected"
+        # Escape brackets for Rich markup (otherwise [NeMo] is treated as a style tag)
+        return f"\\[{self.profile_name}] Node: {self.model_name} | {status}"
+
     def compose(self) -> ComposeResult:
         with Horizontal(id="status-bar-content"):
             yield Label(self._get_context_glyph(), id="context-glyph")
-            yield Label(f"Node: {self.model_name} | Status: {'Connected' if self.connected else 'Disconnected'}", id="status-text")
+            yield Label(self._build_status_text(), id="status-text")
 
     def update_status(self, connected: bool, model: str = ""):
         self.connected = connected
         self.model_name = model or ("Ready" if connected else "Not connected")
-        self.query_one("#status-text", Label).update(
-            f"Node: {self.model_name} | Status: {'Connected' if connected else 'Disconnected'}"
-        )
+        self.query_one("#status-text", Label).update(self._build_status_text())
+
+    def update_profile(self, profile_name: str):
+        """Update the profile name in status bar."""
+        self.profile_name = profile_name
+        try:
+            self.query_one("#status-text", Label).update(self._build_status_text())
+        except Exception:
+            pass
 
     def update_context_glyph(self, band: str):
         """Update the moon glyph based on context band."""
@@ -849,11 +867,11 @@ class TabbedEditor(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Label("[b]Editor[/b]", classes="panel-header")
-        yield TabbedContent(id="editor-tabs")
         with Horizontal(id="editor-toolbar"):
             yield Button("💾 Save", id="btn-save", classes="editor-btn")
             yield Button("✕ Close", id="btn-close-tab", classes="editor-btn")
             yield Static("", id="editor-status")
+        yield TabbedContent(id="editor-tabs")
 
     async def open_file(self, file_path: str) -> None:
         """Open a file in a new tab (or focus existing)."""
@@ -987,27 +1005,28 @@ class SovwrenIDE(App):
 
     /* Layout Containers - Three Column: Tree | Editor | Chat */
     #main-layout { height: 1fr; }
-    #sidebar-left { width: 18%; min-width: 20; border-right: solid #1a1a1a; background: #000000; }
-    #editor-panel { width: 40%; border-right: solid #1a1a1a; background: #000000; }
-    #chat-panel { width: 1fr; background: #000000; }
+    #sidebar-left { width: 18%; min-width: 20; height: 100%; border-right: solid #1a1a1a; background: #000000; }
+    #editor-panel { width: 40%; height: 100%; border-right: solid #1a1a1a; background: #000000; }
+    #chat-panel { width: 1fr; height: 100%; background: #000000; }
 
     /* Tabbed Editor */
-    TabbedEditor { height: 100%; }
+    TabbedEditor { height: 1fr; }
     #editor-tabs { height: 1fr; background: #000000; }
     #editor-tabs ContentSwitcher { height: 1fr; }
     #editor-tabs TabPane { height: 100%; padding: 0; }
     #editor-tabs TextArea { height: 100%; background: #050505; border: none; }
     #editor-toolbar {
-        height: 2;
+        height: 4;
         background: #0a0a0a;
-        border-top: solid #1a1a1a;
+        border-bottom: solid #1a1a1a;
         align: left middle;
         padding: 0 1;
     }
     .editor-btn {
-        min-width: 8;
-        height: 1;
+        min-width: 12;
+        height: 3;
         margin-right: 1;
+        content-align: center middle;
     }
     #editor-status {
         width: 1fr;
@@ -1129,6 +1148,7 @@ class SovwrenIDE(App):
     /* Status Bar */
     StatusBar {
         height: 1;
+        width: 100%;
         background: #000000;
         color: #505050;
         padding: 0 1;
@@ -1262,6 +1282,7 @@ class SovwrenIDE(App):
         self.session_mode = "Workshop"
         self.session_lens = "Blue"
         self.idle_mode = False
+        self.rag_debug_enabled = False  # RAG Debug Mode toggle
 
         # Context tracking (Phase 1 buckets)
         self.conversation_history = []  # List of (role, content) tuples
@@ -1304,8 +1325,8 @@ class SovwrenIDE(App):
                 yield NeuralStream()
                 with Container(id="input-container"):
                     yield ChatInput(id="chat-input", show_line_numbers=False)
+                yield StatusBar()
 
-        yield StatusBar()
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -1432,6 +1453,13 @@ class SovwrenIDE(App):
             self.current_profile = profile
             self.current_profile_name = profile.get("name", profile_name).lower()
             stream.add_message(f"[dim]Profile loaded: {profile.get('name', profile_name)}[/dim]", "system")
+
+            # Update status bar with profile name
+            try:
+                status_bar = self.query_one(StatusBar)
+                status_bar.update_profile(profile.get("name", profile_name))
+            except Exception:
+                pass
 
             # Store preferred model for connect_to_node to use
             preferred = profile.get("preferred_model")
@@ -2141,7 +2169,15 @@ class SovwrenIDE(App):
 
             if hasattr(self, 'rag_initialized') and self.rag_initialized and self.rag_retriever and not is_greeting:
                 try:
-                    rag_context = await self.rag_retriever.retrieve_context(message)
+                    # Call with debug=True if RAG debug mode is enabled
+                    if self.rag_debug_enabled:
+                        rag_context, rag_debug_info = await self.rag_retriever.retrieve_context(
+                            message, debug=True
+                        )
+                    else:
+                        rag_context = await self.rag_retriever.retrieve_context(message)
+                        rag_debug_info = None
+
                     if rag_context and rag_context.strip():
                         context_parts.append("Relevant documents:\n" + rag_context)
                         # Track which files were used (parse from context)
@@ -2152,6 +2188,25 @@ class SovwrenIDE(App):
                                 sources_used.append(match)
                         # Track RAG in context buckets
                         self.rag_chunks_loaded = [(s, "") for s in file_matches]
+
+                    # Display RAG debug info if enabled
+                    if self.rag_debug_enabled and rag_debug_info:
+                        stream.add_message("[dim]───── RAG Debug ─────[/dim]", "hint")
+                        chunks = rag_debug_info.get('chunks_found', 0)
+                        total_ms = rag_debug_info.get('total_time_ms', 0)
+                        stream.add_message(f"[dim]📊 {chunks} chunks | {total_ms}ms[/dim]", "hint")
+                        sources = rag_debug_info.get('sources', [])
+                        scores = rag_debug_info.get('scores', [])
+                        for i, (src, score) in enumerate(zip(sources, scores)):
+                            # Truncate long source names
+                            src_display = src[:40] + "..." if len(src) > 40 else src
+                            stream.add_message(f"[dim]  {i+1}. {src_display} ({score})[/dim]", "hint")
+                        ctx_chars = rag_debug_info.get('context_chars', 0)
+                        has_conv = "conv" if rag_debug_info.get('has_conversation') else ""
+                        has_docs = "docs" if rag_debug_info.get('has_documents') else ""
+                        parts = [p for p in [has_conv, has_docs] if p]
+                        stream.add_message(f"[dim]💾 {ctx_chars} chars | {' + '.join(parts) if parts else 'empty'}[/dim]", "hint")
+
                 except Exception as e:
                     stream.add_message(f"[dim]RAG retrieval skipped: {e}[/dim]", "system")
 
@@ -2543,6 +2598,14 @@ Output ONLY valid JSON."""
                     sanctuary_btn.disabled = False
                 # Log event
                 asyncio.create_task(self._log_event("idleness_toggled", {"state": False, "restored_mode": self.session_mode}))
+
+        elif event.switch.id == "toggle-rag-debug":
+            self.rag_debug_enabled = event.value
+            stream = self.query_one(NeuralStream)
+            if self.rag_debug_enabled:
+                stream.add_message("[cyan]🔍 RAG Debug: On[/cyan]", "system")
+            else:
+                stream.add_message("[dim]🔍 RAG Debug: Off[/dim]", "system")
 
     def action_clear_chat(self) -> None:
         """Clear the chat stream and conversation history."""

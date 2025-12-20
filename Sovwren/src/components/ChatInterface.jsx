@@ -2,7 +2,7 @@ import { Send, Bot, User, AlertCircle } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { sendMessage } from '../services/api';
 
-export default function ChatInterface({ currentModel, apiKeys }) {
+export default function ChatInterface({ currentModel }) {
     const [messages, setMessages] = useState([
         { role: 'assistant', content: 'Welcome to Sovwren. Select a model and let\'s begin.' }
     ]);
@@ -30,7 +30,7 @@ export default function ChatInterface({ currentModel, apiKeys }) {
         setError(null);
 
         try {
-            const response = await sendMessage(currentModel, [...messages, userMessage], apiKeys);
+            const response = await sendMessage(currentModel, [...messages, userMessage]);
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
         } catch (err) {
             console.error(err);

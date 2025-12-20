@@ -1,5 +1,6 @@
 import { X, Save, Key } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { getKeyStatus, setKeys as saveKeys } from '../services/api';
 
 export default function SettingsModal({ isOpen, onClose }) {
     const [keys, setKeys] = useState({
@@ -7,19 +8,27 @@ export default function SettingsModal({ isOpen, onClose }) {
         claude: '',
         openai: ''
     });
+    const [status, setStatus] = useState({ gemini: false, claude: false, openai: false });
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (isOpen) {
-            const savedKeys = localStorage.getItem('sovwren_api_keys');
-            if (savedKeys) {
-                setKeys(JSON.parse(savedKeys));
-            }
+            setError(null);
+            setKeys({ gemini: '', claude: '', openai: '' });
+            getKeyStatus().then(setStatus).catch(() => setStatus({ gemini: false, claude: false, openai: false }));
         }
     }, [isOpen]);
 
-    const handleSave = () => {
-        localStorage.setItem('sovwren_api_keys', JSON.stringify(keys));
-        onClose();
+    const handleSave = async () => {
+        setError(null);
+        try {
+            await saveKeys(keys);
+            const updated = await getKeyStatus();
+            setStatus(updated);
+            onClose();
+        } catch (e) {
+            setError(e?.message || 'Failed to save keys');
+        }
     };
 
     if (!isOpen) return null;
@@ -39,8 +48,16 @@ export default function SettingsModal({ isOpen, onClose }) {
 
                 <div className="p-6 space-y-4">
                     <p className="text-sm text-gray-400 mb-4">
-                        Your keys are stored locally in your browser and never sent to our servers.
+                        Keys are stored in your local Sovwren backend (not in browser storage) and are only sent to the provider you choose.
                     </p>
+                    <p className="text-xs text-gray-500">
+                        Status: Gemini {status.gemini ? 'configured' : 'missing'} | Claude {status.claude ? 'configured' : 'missing'} | OpenAI {status.openai ? 'configured' : 'missing'}
+                    </p>
+                    {error && (
+                        <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                            {error}
+                        </p>
+                    )}
 
                     <div className="space-y-2">
                         <label className="text-xs font-medium text-gray-300 uppercase tracking-wider">Google Gemini API Key</label>

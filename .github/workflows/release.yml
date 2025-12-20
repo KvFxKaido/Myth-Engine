@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Smoke test - syntax check
+        run: |
+          echo "Running syntax checks..."
+          python -m py_compile Sovwren/sovwren_ide.py
+          python -m py_compile Sovwren/config.py
+          python -m py_compile Sovwren/main.py
+          python -m compileall Sovwren/core -q
+          python -m compileall Sovwren/llm -q
+          python -m compileall Sovwren/cli -q
+          echo "Syntax checks passed"
+
+      - name: Smoke test - imports
+        run: |
+          echo "Checking basic imports..."
+          cd Sovwren
+          pip install textual rich aiohttp aiosqlite httpx anyio --quiet
+          python -c "from config import load_profile, list_profiles; print('Config OK')"
+          python -c "from core.database import Database; print('Database OK')"
+          echo "Import checks passed"
+
+      - name: Create release archive
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          ARCHIVE_NAME="sovwren-${TAG}"
+
+          echo "Creating ${ARCHIVE_NAME}.zip..."
+
+          # Create temp directory for release contents
+          mkdir -p release_staging
+
+          # Copy Sovwren package
+          cp -r Sovwren release_staging/
+
+          # Remove build artifacts and caches
+          find release_staging -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find release_staging -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+          find release_staging -type f -name "*.pyc" -delete 2>/dev/null || true
+          find release_staging -type d -name "venv" -exec rm -rf {} + 2>/dev/null || true
+          find release_staging -type d -name "node_modules" -exec rm -rf {} + 2>/dev/null || true
+          rm -rf release_staging/Sovwren/data/*.db 2>/dev/null || true
+
+          # Copy root files
+          cp README.md release_staging/ 2>/dev/null || true
+          cp LICENSE release_staging/ 2>/dev/null || true
+
+          # Create zip
+          cd release_staging
+          zip -r "../${ARCHIVE_NAME}.zip" .
+          cd ..
+
+          echo "Archive created: ${ARCHIVE_NAME}.zip"
+
+      - name: Generate checksums
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          ARCHIVE_NAME="sovwren-${TAG}.zip"
+
+          echo "Generating SHA256 checksum..."
+          sha256sum "${ARCHIVE_NAME}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sovwren-${{ github.event.release.tag_name }}.zip
+            SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
