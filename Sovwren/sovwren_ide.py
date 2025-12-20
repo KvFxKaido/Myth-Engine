@@ -2269,6 +2269,8 @@ class SovwrenIDE(App):
                         # Show citations in chat
                         citations = self.search_manager.format_citations(search_results)
                         stream.add_message(f"[dim]Sources found:[/dim]\n{citations}", "system")
+                    else:
+                        stream.add_message("[dim]Search returned no results[/dim]", "system")
                 except Exception as e:
                     stream.add_message(f"[yellow]Search failed: {e}[/yellow]", "system")
 
