@@ -28,7 +28,7 @@ class DuckDuckGoSearchAdapter(SearchAdapter):
     def is_configured(self) -> bool:
         # Always configured - no API key needed
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
             return True
         except ImportError:
             return False
@@ -39,11 +39,11 @@ class DuckDuckGoSearchAdapter(SearchAdapter):
             return
 
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
             self._ddgs = DDGS()
         except ImportError:
             raise SearchError(
-                "duckduckgo-search package not installed. Run: pip install duckduckgo-search",
+                "ddgs package not installed. Run: pip install ddgs",
                 provider=self.provider_name,
                 recoverable=False
             )
