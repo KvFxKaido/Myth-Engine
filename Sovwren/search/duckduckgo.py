@@ -65,17 +65,18 @@ class DuckDuckGoSearchAdapter(SearchAdapter):
 
         try:
             # Run the synchronous DDG call in a thread
-            results_raw = await asyncio.to_thread(
-                self._ddgs.text,
-                query,
-                max_results=max_results
-            )
+            # The text() method returns a generator, need to convert to list
+            def do_search():
+                return list(self._ddgs.text(query, max_results=max_results))
+
+            results_raw = await asyncio.to_thread(do_search)
 
             results = []
             for item in results_raw:
-                url = item.get("href", "")
+                # DDG returns: href, title, body
+                url = item.get("href", "") or item.get("link", "")
                 title = item.get("title", "")
-                snippet = item.get("body", "")
+                snippet = item.get("body", "") or item.get("snippet", "")
 
                 if not url or not title:
                     continue
