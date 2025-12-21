@@ -36,14 +36,10 @@ Local-first. No cloud dependency. Connects to LM Studio or Ollama.
 ### Setup
 
 ```bash
-# Clone the repository
+# Clone and run
 git clone https://github.com/KvFxKaido/Sovwren.git
-cd Sovwren/Sovwren
-
-# Install dependencies
+cd Sovwren
 pip install -r requirements.txt
-
-# Run the IDE
 python sovwren_ide.py
 ```
 

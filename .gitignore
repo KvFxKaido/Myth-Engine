@@ -17,26 +17,19 @@ COUNCIL-STATUS.md
 COUNCIL-BRIEF.md
 STATUS.md
 IDEAS.md
+Sovwren_IDEAS.md
 Primer*.md
 
 # Tuned profiles (keep minimal.json as public example)
-Sovwren/profiles/nemo.json
-Sovwren/profiles/oracle.json
-
-# Internal framework docs inside package
-Sovwren/CLAUDE.md
-Sovwren/AGENTS.md
-Sovwren/AGENTS.override.md
-Sovwren/GEMINI.md
-Sovwren/IDEAS.md
+profiles/nemo.json
+profiles/oracle.json
 
 # -------------------------------------------
 # User data (personal, not shared)
 # -------------------------------------------
 Bookmarks/
-Sovwren/Bookmarks/
 Memory/
-Sovwren/data/
+data/
 Archive/
 Media/*
 !Media/Sovwren_Logo_2.jpg
@@ -47,7 +40,6 @@ Images/
 # -------------------------------------------
 .claude/
 venv/
-Sovwren/venv/
 .env
 *.local
 
@@ -61,13 +53,6 @@ __pycache__/
 .Python
 *.egg-info/
 .eggs/
-
-# -------------------------------------------
-# Node artifacts (legacy web stuff)
-# -------------------------------------------
-node_modules/
-dist/
-dist-ssr/
 
 # -------------------------------------------
 # OS / Editor
