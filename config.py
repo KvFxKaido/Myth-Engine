@@ -24,11 +24,7 @@ LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v
 LMSTUDIO_DEFAULT_MODEL = os.environ.get("LMSTUDIO_DEFAULT_MODEL", "")
 
 # Search Gate settings (Friction Class VI)
-# API keys for external search providers
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-# Future providers can be added here:
-# TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-# SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
+# DuckDuckGo is the default provider - no API key required
 
 # Search Gate default state: Local-only (web disabled by default)
 SEARCH_GATE_DEFAULT = os.environ.get("SOVWREN_SEARCH_GATE", "local")  # "local" or "web"

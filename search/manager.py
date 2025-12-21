@@ -12,10 +12,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from config import GEMINI_API_KEY, SEARCH_GATE_DEFAULT
+from config import SEARCH_GATE_DEFAULT
 from .base import SearchAdapter, SearchResult, SearchError
 from .duckduckgo import DuckDuckGoSearchAdapter
-from .gemini import GeminiSearchAdapter
 
 
 @dataclass
@@ -80,15 +79,7 @@ class SearchManager:
         if ddg.is_configured:
             self._adapters["DuckDuckGo"] = ddg
 
-        # Gemini - requires API key
-        if GEMINI_API_KEY:
-            self._adapters["Gemini"] = GeminiSearchAdapter(api_key=GEMINI_API_KEY)
-
-        # Future: Add more adapters as they're implemented
-        # if TAVILY_API_KEY:
-        #     self._adapters["Tavily"] = TavilySearchAdapter(api_key=TAVILY_API_KEY)
-
-        # Set first available adapter as default (DuckDuckGo preferred)
+        # Set first available adapter as default
         if self._adapters:
             self._active_adapter = list(self._adapters.keys())[0]
 

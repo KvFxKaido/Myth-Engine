@@ -2309,7 +2309,7 @@ class SovwrenIDE(App):
                 providers = ", ".join(search_manager.available_providers)
                 stream.add_message(f"[dim]Search Gate ready: {providers}[/dim]", "system")
             else:
-                stream.add_message("[dim]Search Gate: No providers configured (set GEMINI_API_KEY)[/dim]", "system")
+                stream.add_message("[dim]Search Gate: No providers available[/dim]", "system")
 
             # Update status bar
             status_bar = self.query_one(StatusBar)
