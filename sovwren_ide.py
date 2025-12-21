@@ -1688,27 +1688,12 @@ class SovwrenIDE(App):
             stream.add_message("[yellow]Search Gate not available (no providers configured)[/yellow]", "system")
             return
 
-        # Toggle the gate
-        new_state = self.search_manager.toggle_gate()
-        self.search_gate_enabled = new_state
-
-        # Update UI
-        stream = self.query_one(NeuralStream)
-        status_bar = self.query_one(StatusBar)
-        status_bar.update_search_gate(self.search_manager.state.status_text())
-
-        # Sync the toggle switch
+        # Sync the toggle switch - the switch handler will update state and display messages
         try:
             switch = self.query_one("#toggle-search-gate", Switch)
-            switch.value = new_state
+            switch.value = not switch.value
         except Exception:
             pass
-
-        if new_state:
-            provider = self.search_manager.state.provider
-            stream.add_message(f"[green]Search Gate opened ({provider})[/green]", "system")
-        else:
-            stream.add_message("[dim]Search Gate closed (local-only)[/dim]", "system")
 
     def action_toggle_council_gate(self) -> None:
         """Toggle Council Gate (F6). Friction Class VI extension - consent for cloud consultation."""
@@ -1717,28 +1702,12 @@ class SovwrenIDE(App):
             stream.add_message("[yellow]Council Gate not available (not initialized)[/yellow]", "system")
             return
 
-        # Toggle the gate
-        self.council_gate_enabled = not self.council_gate_enabled
-
-        # Update UI
-        stream = self.query_one(NeuralStream)
-        status_bar = self.query_one(StatusBar)
-
-        # Sync the toggle switch
+        # Sync the toggle switch - the switch handler will update state and display messages
         try:
             switch = self.query_one("#toggle-council-gate", Switch)
-            switch.value = self.council_gate_enabled
+            switch.value = not switch.value
         except Exception:
             pass
-
-        if self.council_gate_enabled:
-            # Get current council model name
-            model_name = self.council_model or "default"
-            status_bar.update_council_gate(model_name)
-            stream.add_message(f"[green]☁️ Council Gate opened ({model_name})[/green]", "system")
-        else:
-            status_bar.update_council_gate("Off")
-            stream.add_message("[dim]☁️ Council Gate closed (local-only)[/dim]", "system")
 
     async def _open_session_picker(self) -> None:
         try:
