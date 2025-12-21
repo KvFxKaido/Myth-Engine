@@ -70,4 +70,5 @@ __pycache__/
 *.njsproj
 *.sln
 *.sw?
+*.lnk
 nul

@@ -97,26 +97,40 @@ class WebScraper:
 
     async def scrape_url(self, url: str) -> Optional[Dict[str, str]]:
         """Scrape content from a URL"""
-        reason = self._validate_url(url)
-        if reason:
-            print(f"Blocked scrape for {url}: {reason}")
-            return None
-
         try:
             session = await self._get_session()
-            
-            async with session.get(url, allow_redirects=True, max_redirects=self.max_redirects) as response:
-                if response.status != 200:
-                    print(f"HTTP {response.status} for {url}")
-                    return None
-                
-                raw = await response.content.read(self.max_html_bytes + 1)
-                if len(raw) > self.max_html_bytes:
-                    print(f"Response too large for {url} (>{self.max_html_bytes} bytes)")
+
+            current = url
+            for _ in range(max(0, self.max_redirects) + 1):
+                reason = self._validate_url(current)
+                if reason:
+                    print(f"Blocked scrape for {current}: {reason}")
                     return None
 
-                html = raw.decode(errors="replace")
-                return self._extract_content(html, url)
+                async with session.get(current, allow_redirects=False) as response:
+                    # Manual redirect handling so SSRF checks apply to each hop.
+                    if response.status in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("Location")
+                        if not location:
+                            print(f"Redirect without Location for {current}")
+                            return None
+                        current = urljoin(current, location)
+                        continue
+
+                    if response.status != 200:
+                        print(f"HTTP {response.status} for {current}")
+                        return None
+
+                    raw = await response.content.read(self.max_html_bytes + 1)
+                    if len(raw) > self.max_html_bytes:
+                        print(f"Response too large for {current} (>{self.max_html_bytes} bytes)")
+                        return None
+
+                    html = raw.decode(errors="replace")
+                    return self._extract_content(html, current)
+
+            print(f"Too many redirects for {url}")
+            return None
                 
         except asyncio.TimeoutError:
             print(f"Timeout scraping {url}")

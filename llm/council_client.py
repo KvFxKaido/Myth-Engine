@@ -2,6 +2,7 @@
 import asyncio
 import aiohttp
 from typing import Optional
+from urllib.parse import urlparse
 
 from config import (
     COUNCIL_PROVIDER,
@@ -13,7 +14,8 @@ from config import (
     COUNCIL_DEFAULT_MODEL,
     TIMEOUTS,
     load_profile,
-    build_council_brief
+    build_council_brief,
+    prepare_council_brief,
 )
 
 
@@ -34,6 +36,7 @@ class CouncilClient:
         self.provider = provider
         self.session = None
         self._council_profile = None
+        self._base_url_error = None
 
         # Set up based on provider
         if provider == "ollama":
@@ -44,6 +47,7 @@ class CouncilClient:
             self.api_base = COUNCIL_OPENROUTER_BASE.rstrip('/')
             self.models = COUNCIL_OPENROUTER_MODELS
             self.api_key = COUNCIL_OPENROUTER_KEY
+            self._base_url_error = self._validate_openrouter_base(self.api_base)
 
         # Set current model
         self.current_model_shortname = COUNCIL_DEFAULT_MODEL
@@ -51,6 +55,22 @@ class CouncilClient:
             COUNCIL_DEFAULT_MODEL,
             list(self.models.values())[0] if self.models else None
         )
+
+    def _validate_openrouter_base(self, base: str) -> Optional[str]:
+        """Avoid accidentally sending API keys to arbitrary endpoints."""
+        try:
+            parsed = urlparse(base)
+        except Exception:
+            return "Invalid COUNCIL_API_BASE"
+
+        if parsed.scheme.lower() != "https":
+            return "COUNCIL_API_BASE must be https:// for OpenRouter"
+
+        host = (parsed.hostname or "").lower()
+        if host != "openrouter.ai":
+            return "COUNCIL_API_BASE host must be openrouter.ai (refusing to send API key elsewhere)"
+
+        return None
 
     def _get_council_profile(self) -> dict:
         """Load the Council profile (cached)."""
@@ -134,7 +154,7 @@ class CouncilClient:
         if self.provider == "ollama":
             return True  # Ollama just needs to be running
         else:
-            return bool(self.api_key)  # OpenRouter needs API key
+            return bool(self.api_key) and self._base_url_error is None  # OpenRouter needs API key + safe base URL
 
     async def list_models(self) -> list:
         """List available models from the allowlist."""
@@ -180,7 +200,8 @@ class CouncilClient:
             session = await self._get_session()
             async with session.post(
                 f"{self.api_base}/api/chat",
-                json=request_data
+                json=request_data,
+                allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -196,6 +217,9 @@ class CouncilClient:
 
     async def _consult_openrouter(self, brief: str, model: str, system_prompt: str) -> Optional[str]:
         """Send request to OpenRouter API (OpenAI-compatible)."""
+        if self._base_url_error:
+            return f"[Council unavailable: {self._base_url_error}]"
+
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": brief}
@@ -219,7 +243,8 @@ class CouncilClient:
             session = await self._get_session()
             async with session.post(
                 f"{self.api_base}/chat/completions",
-                json=request_data
+                json=request_data,
+                allow_redirects=False,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -254,6 +279,8 @@ class CouncilClient:
             if self.provider == "ollama":
                 return "[Council unavailable: Ollama not running]"
             else:
+                if self._base_url_error:
+                    return f"[Council unavailable: {self._base_url_error}]"
                 return "[Council unavailable: No API key configured]"
 
         model = model or self.current_model
@@ -282,7 +309,8 @@ class CouncilClient:
 
         This is the primary interface for NeMo to consult Council.
         """
-        brief = build_council_brief(
+        # Redact sensitive content by default (best-effort safety belt).
+        brief, _meta = prepare_council_brief(
             mode=mode,
             lens=lens,
             context_band=context_band,
@@ -290,7 +318,7 @@ class CouncilClient:
             user_query=user_query,
             request_type=request_type,
             active_file=active_file,
-            node_assessment=node_assessment
+            node_assessment=node_assessment,
         )
 
         return await self.consult(brief)

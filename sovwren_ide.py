@@ -1352,6 +1352,8 @@ class SovwrenIDE(App):
         self.council_client = None  # Initialized on mount
         self.council_gate_enabled = False
         self.council_model = None  # Current Council model shortname
+        self._pending_council: dict | None = None  # pending /council requiring explicit confirm
+        self._pending_confirm: dict | None = None  # pending high-impact operation requiring explicit confirm
 
         # Context tracking (Phase 1 buckets)
         self.conversation_history = []  # List of (role, content) tuples
@@ -1748,13 +1750,11 @@ class SovwrenIDE(App):
             return
 
         if result.get("action") == "delete" and result.get("session_id"):
-            await self._delete_session(result["session_id"])
-            # Re-open the picker to show updated list
-            await self._open_session_picker()
+            await self._queue_session_delete_confirm(result["session_id"], reopen_picker=True)
             return
 
         if result.get("action") == "delete_all":
-            await self._delete_all_sessions()
+            await self._queue_delete_all_sessions_confirm()
             return
 
         if result.get("action") == "resume" and result.get("session_id"):
@@ -1786,6 +1786,69 @@ class SovwrenIDE(App):
 
         except Exception as e:
             stream.add_message(f"[red]Delete failed: {e}[/red]", "error")
+
+    async def _queue_session_delete_confirm(self, session_id: str, *, reopen_picker: bool) -> None:
+        """Require explicit confirmation before deleting a session."""
+        if self.db is None:
+            return
+
+        stream = self.query_one(NeuralStream)
+        try:
+            info = await self.db.get_session(session_id)
+        except Exception:
+            info = None
+
+        name = None
+        msg_count = None
+        last_active = None
+        if info:
+            name = info.get("name") or info.get("first_message_preview")
+            msg_count = info.get("message_count")
+            last_active = info.get("last_active")
+
+        summary_bits = [f"id={session_id}"]
+        if name:
+            summary_bits.append(f"name=\"{name}\"")
+        if msg_count is not None:
+            summary_bits.append(f"messages={msg_count}")
+        if last_active:
+            summary_bits.append(f"last_active={last_active}")
+
+        stream.add_message("[yellow]Confirm session delete[/yellow]", "system")
+        stream.add_message(f"[dim]{' | '.join(summary_bits)}[/dim]", "system")
+        stream.add_message("[dim]This is destructive and cannot be undone.[/dim]", "system")
+        stream.add_message("[yellow]Type /confirm-yes to delete, or /confirm-no to cancel.[/yellow]", "system")
+
+        self._pending_confirm = {
+            "kind": "delete_session",
+            "payload": {"session_id": session_id, "reopen_picker": reopen_picker},
+            "created_at": time.time(),
+            "expires_at": time.time() + 60,
+        }
+
+    async def _queue_delete_all_sessions_confirm(self) -> None:
+        """Require explicit confirmation before deleting all sessions."""
+        if self.db is None:
+            return
+
+        stream = self.query_one(NeuralStream)
+        try:
+            total_count = await self.db.count_sessions()
+        except Exception:
+            total_count = None
+
+        stream.add_message("[bold red]Confirm DELETE ALL sessions[/bold red]", "system")
+        if total_count is not None:
+            stream.add_message(f"[dim]Sessions with messages: {total_count}[/dim]", "system")
+        stream.add_message("[dim]This is destructive and cannot be undone.[/dim]", "system")
+        stream.add_message("[yellow]Type /confirm-yes to delete ALL, or /confirm-no to cancel.[/yellow]", "system")
+
+        self._pending_confirm = {
+            "kind": "delete_all_sessions",
+            "payload": {},
+            "created_at": time.time(),
+            "expires_at": time.time() + 60,
+        }
 
     async def _delete_all_sessions(self) -> None:
         """Delete all sessions and start fresh."""
@@ -2034,9 +2097,6 @@ class SovwrenIDE(App):
             stream.add_message("[yellow]Council Gate is closed. Enable it with F6 or the ☁️ toggle.[/yellow]", "system")
             return
 
-        # Show consultation indicator
-        stream.add_message("[dim]☁️ Consulting Council...[/dim]", "system")
-
         try:
             # Get active file content if editor has a file open
             active_file = None
@@ -2055,27 +2115,47 @@ class SovwrenIDE(App):
             except Exception:
                 pass  # No active file, that's fine
 
-            # Build Brief and consult Council
-            response = await self.council_client.consult_with_context(
-                user_query=query,
+            # Build a redacted brief and require explicit per-operation consent.
+            from config import prepare_council_brief
+
+            brief, meta = prepare_council_brief(
                 mode=self.session_mode,
                 lens=self.session_lens,
                 context_band=self._last_context_band,
                 recent_turns=[{"role": r, "content": c} for r, c in self.conversation_history[-5:]],
+                user_query=query,
                 request_type="general",
                 active_file=active_file,
-                node_assessment=None  # Let Council work with what it has
+                node_assessment=None,
             )
 
-            if response:
-                # Display Council response with distinct styling
-                stream.add_message(f"[#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
-                stream.add_message(f"[#e0d4c8]{response}[/#e0d4c8]", "council")
+            # Store pending request (expires quickly to prevent accidental later sends)
+            self._pending_council = {
+                "query": query,
+                "brief": brief,
+                "meta": meta,
+                "created_at": time.time(),
+                "expires_at": time.time() + 60,
+            }
 
-                # Add to conversation history so NeMo has context
-                self.conversation_history.append(("council", f"[Council response to '{query}']: {response[:500]}..."))
-            else:
-                stream.add_message("[red]Council returned no response.[/red]", "error")
+            # Preview (redacted) and request explicit confirmation
+            turns = meta.get("turns_included", 0)
+            redactions = meta.get("redaction", {}).get("redactions", 0)
+            file_note = "(none)"
+            if meta.get("active_file_included"):
+                ext = meta.get("active_file_extension") or ""
+                truncated = " (truncated)" if meta.get("active_file_truncated") else ""
+                file_note = f"{ext or 'file'}{truncated}"
+
+            stream.add_message("[#d4a574]☁️ Council Preview (redacted):[/#d4a574]", "system")
+            stream.add_message(
+                f"[dim]Turns: {turns} | Active file: {file_note} | Redactions: {redactions} | Expires: 60s[/dim]",
+                "system",
+            )
+            preview = brief[:1200] + ("\n... (preview truncated)" if len(brief) > 1200 else "")
+            stream.add_message(f"[dim]{preview}[/dim]", "system")
+            stream.add_message("[yellow]Type /council-yes to send, or /council-no to cancel.[/yellow]", "system")
+            return
 
         except Exception as e:
             stream.add_message(f"[red]Council error: {e}[/red]", "error")
@@ -2147,6 +2227,112 @@ class SovwrenIDE(App):
         else:
             available = ", ".join(models.keys())
             stream.add_message(f"[yellow]Model '{model_arg}' not found. Available: {available}[/yellow]", "system")
+
+    async def _handle_council_consent(self, approved: bool) -> None:
+        """Handle /council-yes and /council-no confirmation commands."""
+        stream = self.query_one(NeuralStream)
+
+        pending = self._pending_council
+        if not pending:
+            stream.add_message("[yellow]No pending Council request.[/yellow]", "system")
+            return
+
+        if time.time() > pending.get("expires_at", 0):
+            self._pending_council = None
+            stream.add_message("[yellow]Pending Council request expired. Re-run /council.[/yellow]", "system")
+            return
+
+        if not approved:
+            self._pending_council = None
+            stream.add_message("[dim]☁️ Council request cancelled.[/dim]", "system")
+            return
+
+        if self.council_client is None:
+            self._pending_council = None
+            stream.add_message("[yellow]Council not available.[/yellow]", "system")
+            return
+
+        if not self.council_gate_enabled:
+            self._pending_council = None
+            stream.add_message("[yellow]Council Gate is closed.[/yellow]", "system")
+            return
+
+        # Show consultation indicator
+        stream.add_message("[dim]☁️ Consulting Council...[/dim]", "system")
+
+        query = pending.get("query", "")
+        brief = pending.get("brief", "")
+        self._pending_council = None
+
+        try:
+            response = await self.council_client.consult(brief)
+            if response:
+                stream.add_message(f"[#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
+                stream.add_message(f"[#e0d4c8]{response}[/#e0d4c8]", "council")
+                self.conversation_history.append(("council", f"[Council response to '{query}']: {response[:500]}..."))
+            else:
+                stream.add_message("[red]Council returned no response.[/red]", "error")
+        except Exception as e:
+            stream.add_message(f"[red]Council error: {e}[/red]", "error")
+
+    async def _handle_confirm(self, approved: bool) -> None:
+        """Handle /confirm-yes and /confirm-no for high-impact operations."""
+        stream = self.query_one(NeuralStream)
+
+        pending = self._pending_confirm
+        if not pending:
+            stream.add_message("[yellow]No pending operation to confirm.[/yellow]", "system")
+            return
+
+        if time.time() > pending.get("expires_at", 0):
+            self._pending_confirm = None
+            stream.add_message("[yellow]Pending operation expired. Re-run the action.[/yellow]", "system")
+            return
+
+        if not approved:
+            self._pending_confirm = None
+            stream.add_message("[dim]Operation cancelled.[/dim]", "system")
+            return
+
+        kind = pending.get("kind")
+        payload = pending.get("payload", {}) or {}
+        self._pending_confirm = None
+
+        try:
+            if kind == "git":
+                op = payload.get("op")
+                if op == "pull":
+                    await self._git_pull()
+                elif op == "push":
+                    await self._git_push()
+                elif op == "commit":
+                    message = payload.get("message")
+                    if not message:
+                        stream.add_message("[red]Missing commit message.[/red]", "error")
+                        return
+                    await self._git_commit_execute(message)
+                else:
+                    stream.add_message("[red]Unknown git operation.[/red]", "error")
+                    return
+
+            elif kind == "delete_session":
+                session_id = payload.get("session_id")
+                reopen = bool(payload.get("reopen_picker"))
+                if session_id:
+                    await self._delete_session(session_id)
+                    if reopen:
+                        await self._open_session_picker()
+                else:
+                    stream.add_message("[red]Missing session id.[/red]", "error")
+
+            elif kind == "delete_all_sessions":
+                await self._delete_all_sessions()
+
+            else:
+                stream.add_message("[red]Unknown operation kind.[/red]", "error")
+
+        except Exception as e:
+            stream.add_message(f"[red]Operation failed: {e}[/red]", "error")
 
     async def connect_to_node(self) -> None:
         """Attempt to connect to LM Studio."""
@@ -2419,6 +2605,20 @@ class SovwrenIDE(App):
             msg_lower = message.lower()
 
             try:
+                # Council consent confirmations (handled locally; never sent to Node)
+                if msg_lower in ("/council-yes", "/council-no"):
+                    await self._handle_council_consent(approved=(msg_lower == "/council-yes"))
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Generic confirmations for destructive operations
+                if msg_lower in ("/confirm-yes", "/confirm-no"):
+                    await self._handle_confirm(approved=(msg_lower == "/confirm-yes"))
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
                 # Check if this is a memory store command
                 if msg_lower.startswith(('remember:', 'store:', 'save:')):
                     content = message.split(':', 1)[1].strip() if ':' in message else message
@@ -2686,11 +2886,11 @@ class SovwrenIDE(App):
 
         # Git buttons
         elif button_id == "btn-git-pull":
-            await self._git_pull()
+            await self._queue_git_confirm("pull")
         elif button_id == "btn-git-commit":
-            await self._git_commit()
+            await self._queue_git_confirm("commit")
         elif button_id == "btn-git-push":
-            await self._git_push()
+            await self._queue_git_confirm("push")
 
     async def on_directory_tree_file_selected(self, event) -> None:
         """Handle file selection in the workspace tree.
@@ -3051,6 +3251,8 @@ Output ONLY valid JSON."""
 
         lines: list[str] = []
         for role, content in turns:
+            if role == "council":
+                continue  # Don't inject Council content as plain context by default.
             speaker = "Steward" if role == "steward" else ("Node" if role == "node" else role)
             text = (content or "").strip().replace("\n", " ").strip()
             if len(text) > 300:
@@ -3417,53 +3619,32 @@ Output ONLY valid JSON."""
             stream.add_message(f"[red]Git error: {e}[/red]", "error")
 
     async def _git_commit(self) -> None:
-        """Open commit modal and commit staged/all changes."""
+        """Back-compat: stage+commit now requires explicit confirmation."""
+        await self._queue_git_confirm("commit")
+
+    async def _git_commit_execute(self, message: str) -> None:
+        """Commit changes (execution path; call only after explicit confirm)."""
         import subprocess
         stream = self.query_one(NeuralStream)
-
-        # First check if there are changes to commit
-        try:
-            status_result = await asyncio.to_thread(
-                subprocess.run,
-                ["git", "status", "--porcelain"],
-                cwd=str(workspace_root),
-                capture_output=True,
-                text=True
-            )
-            if not status_result.stdout.strip():
-                stream.add_message("[dim]No changes to commit.[/dim]", "system")
-                return
-        except Exception as e:
-            stream.add_message(f"[red]Git error: {e}[/red]", "error")
-            return
-
-        # Show commit modal
-        message = await self.push_screen_wait(CommitModal())
-        if not message:
-            stream.add_message("[dim]Commit cancelled.[/dim]", "system")
-            return
 
         stream.add_message(f"[dim]📝 Committing: {message}[/dim]", "system")
 
         try:
-            # Stage all changes
             await asyncio.to_thread(
                 subprocess.run,
                 ["git", "add", "-A"],
                 cwd=str(workspace_root),
-                capture_output=True
+                capture_output=True,
             )
 
-            # Commit with message
             result = await asyncio.to_thread(
                 subprocess.run,
                 ["git", "commit", "-m", message],
                 cwd=str(workspace_root),
                 capture_output=True,
-                text=True
+                text=True,
             )
             if result.returncode == 0:
-                # Extract short info from output
                 lines = result.stdout.strip().split('\n')
                 summary = lines[0] if lines else "Committed"
                 stream.add_message(f"[green]✓ {summary}[/green]", "system")
@@ -3472,6 +3653,81 @@ Output ONLY valid JSON."""
                 stream.add_message(f"[red]✗ {error}[/red]", "error")
         except Exception as e:
             stream.add_message(f"[red]Git error: {e}[/red]", "error")
+
+    async def _queue_git_confirm(self, op: str) -> None:
+        """Show a git preview and require explicit confirmation before execution."""
+        import subprocess
+
+        stream = self.query_one(NeuralStream)
+
+        def run_git(args: list[str]) -> str:
+            try:
+                r = subprocess.run(
+                    ["git", *args],
+                    cwd=str(workspace_root),
+                    capture_output=True,
+                    text=True,
+                )
+                out = (r.stdout or r.stderr or "").strip()
+                return out[:1200]
+            except Exception as e:
+                return f"(preview failed: {e})"
+
+        if op == "commit":
+            status_porcelain = run_git(["status", "--porcelain"])
+            if not status_porcelain.strip():
+                stream.add_message("[dim]No changes to commit.[/dim]", "system")
+                return
+
+            message = await self.push_screen_wait(CommitModal())
+            if not message:
+                stream.add_message("[dim]Commit cancelled.[/dim]", "system")
+                return
+
+            diff_stat = run_git(["diff", "--stat"])
+
+            stream.add_message("[yellow]Confirm git commit[/yellow]", "system")
+            stream.add_message(f"[dim]Message: {message}[/dim]", "system")
+            stream.add_message("[dim]This will run: git add -A; git commit -m \"…\"[/dim]", "system")
+            stream.add_message("[dim]git status --porcelain (preview):[/dim]", "system")
+            stream.add_message(f"[dim]{status_porcelain}[/dim]", "system")
+            if diff_stat:
+                stream.add_message("[dim]git diff --stat (preview):[/dim]", "system")
+                stream.add_message(f"[dim]{diff_stat}[/dim]", "system")
+            stream.add_message("[yellow]Type /confirm-yes to commit, or /confirm-no to cancel.[/yellow]", "system")
+
+            self._pending_confirm = {
+                "kind": "git",
+                "payload": {"op": "commit", "message": message},
+                "created_at": time.time(),
+                "expires_at": time.time() + 60,
+            }
+            return
+
+        if op not in {"pull", "push"}:
+            stream.add_message("[red]Unknown git operation.[/red]", "error")
+            return
+
+        status_sb = run_git(["status", "-sb"])
+        stream.add_message(f"[yellow]Confirm git {op}[/yellow]", "system")
+        stream.add_message(f"[dim]This will run: git {op}[/dim]", "system")
+        if status_sb:
+            stream.add_message("[dim]git status -sb (preview):[/dim]", "system")
+            stream.add_message(f"[dim]{status_sb}[/dim]", "system")
+
+        if op == "push":
+            ahead = run_git(["log", "--oneline", "@{u}.."])
+            if ahead and not ahead.startswith("(preview failed"):
+                stream.add_message("[dim]Commits to push (preview):[/dim]", "system")
+                stream.add_message(f"[dim]{ahead}[/dim]", "system")
+
+        stream.add_message("[yellow]Type /confirm-yes to proceed, or /confirm-no to cancel.[/yellow]", "system")
+        self._pending_confirm = {
+            "kind": "git",
+            "payload": {"op": op},
+            "created_at": time.time(),
+            "expires_at": time.time() + 60,
+        }
 
     async def _git_push(self) -> None:
         """Push commits to remote."""

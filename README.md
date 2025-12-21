@@ -39,10 +39,13 @@ When your local model hits its limits, consult a cloud model without leaving the
 The local model (NeMo) prepares a **Brief** with your current context, sends it to the cloud model (Council), and contextualizes the response. You see exactly what's happening — no silent escalation.
 
 **Commands:**
-- `F6` or ☁️ toggle — Enable/disable Council Gate
-- `/council <query>` — Send query to cloud model
-- `/seat` — List available cloud models
-- `/seat <model>` — Switch Council model (e.g., `/seat deepseek`)
+- `F6` or ☁️ toggle - Enable/disable Council Gate
+- `/council <query>` - Prepare a redacted Brief + preview (requires confirm)
+- `/council-yes` - Send the pending Brief
+- `/council-no` - Cancel the pending Brief
+- `/confirm-yes` / `/confirm-no` - Confirm/cancel destructive ops (git, session deletes)
+- `/seat` - List available cloud models
+- `/seat <model>` - Switch Council model (e.g., `/seat deepseek`)
 
 **Backends:**
 - **Ollama Cloud** (default) — Uses your local Ollama to route to cloud GPUs. Run `ollama login` to authenticate.

@@ -516,8 +516,8 @@ class NeMoCLI:
         # Remove date parts
         title = re.sub(r'\b(?:tomorrow|today)\b', '', title, flags=re.IGNORECASE).strip()
         title = re.sub(r'\d{4}-\d{1,2}-\d{1,2}', '', title).strip()
-        # Remove trailing words like "to jrvs"
-        title = re.sub(r'\bto\s+jrvs\b', '', title, flags=re.IGNORECASE).strip()
+        # Remove trailing words like "to sovwren" (legacy phrasing)
+        title = re.sub(r'\bto\s+sovwren\b', '', title, flags=re.IGNORECASE).strip()
 
         # Clean up title
         title = re.sub(r'\s+', ' ', title).strip(',. ')
@@ -560,11 +560,10 @@ class NeMoCLI:
         theme.print_help(commands)
         theme.print_separator()
         theme.print_info("🤖 Intelligent Agent:")
-        theme.console.print("  NeMo automatically detects when to use tools!")
-        theme.console.print("  Just chat naturally - tools are used when needed")
-        theme.console.print("  Example: 'read the file /tmp/test.txt'")
+        theme.console.print("  NeMo can use tools when needed (reads are safe by default).")
+        theme.console.print("  Example: 'read the file workspace/notes.txt'")
         theme.console.print("  Example: 'remember that I prefer Python 3.11'")
-        theme.console.print("  Note: filesystem writes/deletes are blocked by default (set SOVWREN_MCP_WRITE_MODE=confirm)")
+        theme.console.print("  Note: any tool-initiated file writes/deletes should require explicit confirmation.")
         theme.print_separator()
         theme.print_info("💾 Session Management:")
         theme.console.print("  /sessions           - List recent chat sessions")
@@ -685,6 +684,28 @@ class NeMoCLI:
         if target_id == self.session_id:
             theme.print_error("Cannot delete the current active session")
             theme.print_info("Use /new to start a fresh session first")
+            return
+
+        # Preview + explicit confirmation
+        target = next((s for s in sessions if s.get("id") == target_id), None)
+        if target:
+            name = target.get("name") or target.get("first_message_preview") or "Unnamed"
+            theme.print_warning("About to delete session:")
+            theme.console.print(f"  id: {target_id}")
+            theme.console.print(f"  name: {name}")
+            theme.console.print(f"  messages: {target.get('message_count', 0)}")
+            theme.console.print(f"  last_active: {target.get('last_active', '')}")
+        else:
+            theme.print_warning(f"About to delete session id: {target_id}")
+
+        try:
+            from rich.prompt import Prompt
+            typed = Prompt.ask("Type DELETE to confirm", default="")
+        except Exception:
+            typed = input("Type DELETE to confirm: ").strip()
+
+        if typed.strip() != "DELETE":
+            theme.print_info("Cancelled.")
             return
         
         deleted_name = await session_manager.delete_session(session_ref)

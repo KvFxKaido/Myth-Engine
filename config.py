@@ -615,6 +615,157 @@ COUNCIL_OLLAMA_BASE = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"
 COUNCIL_OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 COUNCIL_OPENROUTER_BASE = os.environ.get("COUNCIL_API_BASE", "https://openrouter.ai/api/v1")
 
+# Council safety defaults
+# - Redaction is always-on by default (best-effort; does not guarantee zero leakage).
+# - Confirmation and preview are enforced at the UI layer (see sovwren_ide.py).
+COUNCIL_REDACT_SENSITIVE = os.environ.get("SOVWREN_COUNCIL_REDACT", "1").strip() != "0"
+COUNCIL_MAX_ACTIVE_FILE_CHARS = int(os.environ.get("SOVWREN_COUNCIL_MAX_FILE_CHARS", "2000"))
+COUNCIL_MAX_TURN_CHARS = int(os.environ.get("SOVWREN_COUNCIL_MAX_TURN_CHARS", "500"))
+
+
+def _redact_sensitive_text(text: str) -> tuple[str, dict]:
+    """Best-effort redaction for obvious secrets.
+
+    Returns (redacted_text, stats).
+    """
+    import re
+
+    if not text:
+        return text, {"redactions": 0, "patterns": {}}
+
+    patterns: list[tuple[str, str, str]] = [
+        (
+            "private_key_block",
+            r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+            "[REDACTED_PRIVATE_KEY_BLOCK]",
+        ),
+        ("github_pat", r"\bghp_[A-Za-z0-9]{30,}\b", "[REDACTED_GITHUB_TOKEN]"),
+        ("slack_token", r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", "[REDACTED_SLACK_TOKEN]"),
+        ("aws_access_key", r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED_AWS_ACCESS_KEY]"),
+        ("bearer_token", r"(?i)\bAuthorization:\s*Bearer\s+[A-Za-z0-9._\-]{10,}\b", "Authorization: Bearer [REDACTED]"),
+        ("bearer_inline", r"(?i)\bBearer\s+[A-Za-z0-9._\-]{10,}\b", "Bearer [REDACTED]"),
+        (
+            "kv_secret",
+            r"(?im)^\s*(?:OPENAI_API_KEY|OPENROUTER_API_KEY|ANTHROPIC_API_KEY|GOOGLE_API_KEY|GEMINI_API_KEY|HUGGINGFACEHUB_API_TOKEN|HF_TOKEN)\s*=\s*.+$",
+            "[REDACTED_ENV_LINE]",
+        ),
+        (
+            "generic_secret",
+            r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password)\b\s*[:=]\s*[^\s\"']{6,}",
+            r"\1=[REDACTED]",
+        ),
+    ]
+
+    stats = {"redactions": 0, "patterns": {}}
+    redacted = text
+    for name, pat, repl in patterns:
+        before = redacted
+        redacted, n = re.subn(pat, repl, redacted)
+        if n:
+            stats["redactions"] += int(n)
+            stats["patterns"][name] = stats["patterns"].get(name, 0) + int(n)
+    return redacted, stats
+
+
+def prepare_council_brief(
+    *,
+    mode: str,
+    lens: str,
+    context_band: str,
+    recent_turns: list,
+    user_query: str,
+    request_type: str = "general",
+    active_file: tuple | None = None,
+    node_assessment: str | None = None,
+    redact: bool | None = None,
+) -> tuple[str, dict]:
+    """Build a Council Brief plus metadata suitable for UI preview/consent."""
+    use_redaction = COUNCIL_REDACT_SENSITIVE if redact is None else bool(redact)
+
+    meta: dict = {
+        "redaction": {"enabled": use_redaction, "redactions": 0, "patterns": {}},
+        "turns_included": 0,
+        "turns_truncated": False,
+        "active_file_included": False,
+        "active_file_truncated": False,
+        "active_file_extension": "",
+        "active_file_chars": 0,
+    }
+
+    # Format recent turns (last 5, truncated)
+    turns_text = ""
+    if recent_turns:
+        formatted_turns = []
+        for t in recent_turns[-5:]:
+            role_marker = ">" if t.get("role") == "user" else "<"
+            raw = t.get("content", "") or ""
+            content = raw[:COUNCIL_MAX_TURN_CHARS]
+            if len(raw) > COUNCIL_MAX_TURN_CHARS:
+                meta["turns_truncated"] = True
+                content += "..."
+            if use_redaction:
+                content, stats = _redact_sensitive_text(content)
+                meta["redaction"]["redactions"] += stats["redactions"]
+                for k, v in stats["patterns"].items():
+                    meta["redaction"]["patterns"][k] = meta["redaction"]["patterns"].get(k, 0) + v
+            formatted_turns.append(f"{role_marker} {content}")
+        meta["turns_included"] = min(5, len(recent_turns))
+        turns_text = "\n".join(formatted_turns)
+    else:
+        turns_text = "(no prior context)"
+
+    # Node's assessment
+    assessment = node_assessment or "Steward needs heavy reasoning support beyond local capacity."
+    if use_redaction:
+        assessment, stats = _redact_sensitive_text(assessment)
+        meta["redaction"]["redactions"] += stats["redactions"]
+        for k, v in stats["patterns"].items():
+            meta["redaction"]["patterns"][k] = meta["redaction"]["patterns"].get(k, 0) + v
+
+    # File content if relevant
+    file_ext = ""
+    file_content = "(none)"
+    if active_file:
+        file_ext = (active_file[0] or "").strip()
+        content = active_file[1] if len(active_file) > 1 else ""
+        content = content or ""
+        meta["active_file_extension"] = file_ext
+        meta["active_file_chars"] = len(content)
+        meta["active_file_included"] = True
+        file_content = content[:COUNCIL_MAX_ACTIVE_FILE_CHARS]
+        if len(content) > COUNCIL_MAX_ACTIVE_FILE_CHARS:
+            meta["active_file_truncated"] = True
+            file_content += "\n... (truncated)"
+        if use_redaction:
+            file_content, stats = _redact_sensitive_text(file_content)
+            meta["redaction"]["redactions"] += stats["redactions"]
+            for k, v in stats["patterns"].items():
+                meta["redaction"]["patterns"][k] = meta["redaction"]["patterns"].get(k, 0) + v
+
+    # Request type description
+    request_desc = COUNCIL_REQUEST_TYPES.get(request_type, COUNCIL_REQUEST_TYPES["general"])
+
+    safe_query = user_query or ""
+    if use_redaction:
+        safe_query, stats = _redact_sensitive_text(safe_query)
+        meta["redaction"]["redactions"] += stats["redactions"]
+        for k, v in stats["patterns"].items():
+            meta["redaction"]["patterns"][k] = meta["redaction"]["patterns"].get(k, 0) + v
+
+    brief = COUNCIL_BRIEF_TEMPLATE.format(
+        mode=mode,
+        lens=lens,
+        context_band=context_band or "Unknown",
+        recent_turns=turns_text,
+        file_extension=file_ext,
+        file_content=file_content,
+        user_query=safe_query,
+        node_assessment=assessment,
+        request_type=request_desc,
+    )
+
+    return brief, meta
+
 # Allowed cloud models per provider
 # Ollama Cloud models (run via local Ollama, routed to cloud)
 # These use datacenter GPUs via ollama.com - requires `ollama login`
@@ -704,47 +855,18 @@ def build_council_brief(
     Returns:
         Formatted Brief string ready to send to Council
     """
-    # Format recent turns (last 5, truncated)
-    turns_text = ""
-    if recent_turns:
-        formatted_turns = []
-        for t in recent_turns[-5:]:
-            role_marker = ">" if t.get("role") == "user" else "<"
-            content = t.get("content", "")[:500]
-            if len(t.get("content", "")) > 500:
-                content += "..."
-            formatted_turns.append(f"{role_marker} {content}")
-        turns_text = "\n".join(formatted_turns)
-    else:
-        turns_text = "(no prior context)"
-
-    # Node's assessment
-    assessment = node_assessment or "Steward needs heavy reasoning support beyond local capacity."
-
-    # File content if relevant
-    file_ext = ""
-    file_content = "(none)"
-    if active_file:
-        file_ext = active_file[0] if active_file[0] else ""
-        content = active_file[1] if len(active_file) > 1 else ""
-        file_content = content[:2000]
-        if len(content) > 2000:
-            file_content += "\n... (truncated)"
-
-    # Request type description
-    request_desc = COUNCIL_REQUEST_TYPES.get(request_type, COUNCIL_REQUEST_TYPES["general"])
-
-    return COUNCIL_BRIEF_TEMPLATE.format(
+    brief, _ = prepare_council_brief(
         mode=mode,
         lens=lens,
-        context_band=context_band or "Unknown",
-        recent_turns=turns_text,
-        file_extension=file_ext,
-        file_content=file_content,
+        context_band=context_band,
+        recent_turns=recent_turns,
         user_query=user_query,
-        node_assessment=assessment,
-        request_type=request_desc
+        request_type=request_type,
+        active_file=active_file,
+        node_assessment=node_assessment,
+        redact=COUNCIL_REDACT_SENSITIVE,
     )
+    return brief
 
 
 def build_system_prompt_from_profile(
