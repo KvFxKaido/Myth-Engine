@@ -17,8 +17,8 @@ COUNCIL-STATUS.md
 COUNCIL-BRIEF.md
 STATUS.md
 IDEAS.md
-Sovwren_IDEAS.md
-Primer*.md
+METADATA.md
+CALIBRATION.md
 
 # Tuned profiles (keep minimal.json as public example)
 profiles/nemo.json

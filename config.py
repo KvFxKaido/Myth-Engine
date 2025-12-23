@@ -362,6 +362,16 @@ CONTEXT AWARENESS: Session context load remains CRITICAL.
 Do NOT re-acknowledge - already mentioned. Focus on immediate question only.
 Earlier context is likely unavailable."""
 
+# Social Carryover: Neutral stance when warmth is disabled
+# This replaces conversational stance + matching energy sections
+NEUTRAL_STANCE = """
+NEUTRAL STANCE:
+- Respond without assumed familiarity
+- No greeting warmth unless explicitly re-established
+- Professional, clear, direct
+- Each exchange starts from neutral ground
+- Task context is preserved; relationship is not"""
+
 
 def build_system_prompt(mode: str = "Workshop", lens: str = "Blue", idle: bool = False,
                         context_band: str = None, context_first_warning: bool = False) -> str:
@@ -875,7 +885,8 @@ def build_system_prompt_from_profile(
     lens: str = "Blue",
     idle: bool = False,
     context_band: str = None,
-    context_first_warning: bool = False
+    context_first_warning: bool = False,
+    social_carryover: bool = True
 ) -> str:
     """Build system prompt from profile data.
 
@@ -894,31 +905,37 @@ def build_system_prompt_from_profile(
     if priority:
         parts.append("\n".join(priority))
 
-    # === CONVERSATIONAL STANCE ===
-    stance = system_prompt.get("conversational_stance", [])
-    if stance:
-        parts.append("CONVERSATIONAL STANCE:\n" + "\n".join(f"- {s}" for s in stance))
+    # === SOCIAL CARRYOVER GATE ===
+    # When social_carryover is False, replace warm sections with neutral stance
+    if social_carryover:
+        # === CONVERSATIONAL STANCE ===
+        stance = system_prompt.get("conversational_stance", [])
+        if stance:
+            parts.append("CONVERSATIONAL STANCE:\n" + "\n".join(f"- {s}" for s in stance))
 
-    # === MATCHING ENERGY (from philosophical_questions + core_behavior) ===
-    # Combine into a single MATCHING ENERGY section for clarity
-    phil_q = system_prompt.get("philosophical_questions", [])
-    core = system_prompt.get("core_behavior", [])
-    defaults = system_prompt.get("defaults", [])
+        # === MATCHING ENERGY (from philosophical_questions + core_behavior) ===
+        # Combine into a single MATCHING ENERGY section for clarity
+        phil_q = system_prompt.get("philosophical_questions", [])
+        core = system_prompt.get("core_behavior", [])
+        defaults = system_prompt.get("defaults", [])
 
-    if phil_q or core or defaults:
-        energy_lines = []
-        # Extract key matching rules
-        if defaults:
-            energy_lines.extend(defaults[:2])  # First 2 defaults
-        if phil_q:
-            energy_lines.append(phil_q[0] if phil_q else "")  # First philosophical rule
-        if core:
-            energy_lines.extend(core[:2])  # First 2 core behaviors
-        parts.append("MATCHING ENERGY:\n" + "\n".join(f"- {e}" for e in energy_lines if e))
+        if phil_q or core or defaults:
+            energy_lines = []
+            # Extract key matching rules
+            if defaults:
+                energy_lines.extend(defaults[:2])  # First 2 defaults
+            if phil_q:
+                energy_lines.append(phil_q[0] if phil_q else "")  # First philosophical rule
+            if core:
+                energy_lines.extend(core[:2])  # First 2 core behaviors
+            parts.append("MATCHING ENERGY:\n" + "\n".join(f"- {e}" for e in energy_lines if e))
 
-    # === CORE BEHAVIOR (remaining) ===
-    if core and len(core) > 2:
-        parts.append("CORE BEHAVIOR:\n" + "\n".join(f"- {c}" for c in core[2:]))
+        # === CORE BEHAVIOR (remaining) ===
+        if core and len(core) > 2:
+            parts.append("CORE BEHAVIOR:\n" + "\n".join(f"- {c}" for c in core[2:]))
+    else:
+        # Social Carryover OFF: neutral ground, no warmth priming
+        parts.append(NEUTRAL_STANCE)
 
     # === OUTPUT RULE (prevent state narration) ===
     parts.append("""OUTPUT RULE:

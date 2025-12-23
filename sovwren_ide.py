@@ -474,10 +474,12 @@ class SessionPickerModal(Screen):
     }
     #session-buttons {
         height: auto;
-        align: right middle;
+        align: center middle;  /* Center instead of right to avoid cutoff */
     }
     #session-buttons Button {
         margin-left: 1;
+        min-width: 8;  /* Compact buttons for narrow windows */
+        max-width: 12;
     }
     /* Ethical friction: armed delete buttons */
     .delete-armed {
@@ -669,10 +671,9 @@ class ProtocolDeck(Vertical):
 
         yield Label("[b]Gates[/b]", classes="panel-header panel-header-spaced")
         with Horizontal(classes="toggle-row"):
-            yield Label("🌐 Web", classes="toggle-label")
+            yield Label("🌐", classes="toggle-label")
             yield Switch(value=False, id="toggle-search-gate")
-        with Horizontal(classes="toggle-row"):
-            yield Label("☁️ Cloud", classes="toggle-label")
+            yield Label("☁️", classes="toggle-label")
             yield Switch(value=False, id="toggle-council-gate")
 
         # Secondary controls - collapsed by default
@@ -742,6 +743,59 @@ class NeuralStream(ScrollableContainer):
         self.scroll_end(animate=False)
 
 
+class BottomDock(Vertical):
+    """Bottom dock for Tall layout - Files, Context, Controls as tabs.
+    
+    Philosophy: Bottom dock preserves reading width and aligns with scroll direction.
+    "Appear, do work, leave." - not permanent co-presence.
+    """
+
+    def compose(self) -> ComposeResult:
+        with TabbedContent(id="dock-tabs"):
+            with TabPane("📁 Files", id="dock-files"):
+                yield DirectoryTree(str(workspace_root), id="dock-file-tree")
+            
+            with TabPane("📋 Context", id="dock-context"):
+                yield Static("[dim]No context loaded[/dim]", id="dock-context-status")
+                yield Static("", id="dock-memory-status")
+            
+            with TabPane("⚙️ Controls", id="dock-controls"):
+                # Mode buttons (essential)
+                yield Label("[b]Mode[/b]", classes="panel-header")
+                with Horizontal(classes="button-row"):
+                    yield Button("🛠 Workshop", id="dock-mode-workshop", classes="mode-btn active")
+                    yield Button("🕯 Sanctuary", id="dock-mode-sanctuary", classes="mode-btn")
+                
+                # Gates (essential)
+                yield Label("[b]Gates[/b]", classes="panel-header")
+                with Horizontal(classes="toggle-row"):
+                    yield Label("🌐", classes="toggle-label")
+                    yield Switch(value=False, id="dock-toggle-search-gate")
+                    yield Label("☁️", classes="toggle-label")
+                    yield Switch(value=False, id="dock-toggle-council-gate")
+                
+                # Lens
+                yield Label("[b]Lens[/b]", classes="panel-header")
+                with Horizontal(classes="button-row"):
+                    yield Button("🔵", id="dock-lens-blue", classes="lens-btn active")
+                    yield Button("🔴", id="dock-lens-red", classes="lens-btn")
+                    yield Button("🟣", id="dock-lens-purple", classes="lens-btn")
+
+    def update_context_display(self, context_text: str):
+        """Update the context status in the dock."""
+        try:
+            self.query_one("#dock-context-status", Static).update(context_text)
+        except Exception:
+            pass
+
+    def update_memory_display(self, memory_text: str):
+        """Update the memory status in the dock."""
+        try:
+            self.query_one("#dock-memory-status", Static).update(memory_text)
+        except Exception:
+            pass
+
+
 class StatusBar(Static):
     """Truth Strip: answers Who, What, Cost in one glance."""
     connected = reactive(False)
@@ -752,6 +806,7 @@ class StatusBar(Static):
     council_gate = reactive("Off")  # "Off" or model shortname
     mode = reactive("Workshop")  # "Workshop" or "Sanctuary"
     lens = reactive("Blue")  # "Blue", "Red", or "Purple"
+    social_carryover = reactive(True)  # True = warm, False = neutral
 
     # Moon phases for context load: empty → filling → half → full
     CONTEXT_GLYPHS = {
@@ -800,16 +855,23 @@ class StatusBar(Static):
             return "🛠"
         return "🕯"
 
+    def _get_social_indicator(self) -> str:
+        """Get social carryover indicator."""
+        if self.social_carryover:
+            return "🤝"  # Warm - relationship maintained
+        return "🔲"  # Neutral - task context only
+
     def _build_status_text(self) -> str:
         """Build Truth Strip: Mode | Lens | Node | Connected."""
         status = "Connected" if self.connected else "Disconnected"
         return f"{self.mode} | {self.profile_name}: {self.model_name} | {status}"
 
     def compose(self) -> ComposeResult:
-        # Truth Strip layout: [Mode] [Lens] [Context●] [🔒/🌐] [☁️] [Node info]
+        # Truth Strip layout: [Mode] [Lens] [Social] [Context●] [🔒/🌐] [☁️] [Node info]
         with Horizontal(id="status-bar-content"):
             yield Label(self._get_mode_indicator(), id="mode-glyph")
             yield Label(self._get_lens_glyph(), id="lens-glyph")
+            yield Label(self._get_social_indicator(), id="social-glyph")
             yield Label(self._get_context_glyph(), id="context-glyph")
             yield Label(self._get_search_indicator(), id="search-glyph")
             yield Label(self._get_council_indicator(), id="council-glyph")
@@ -863,6 +925,14 @@ class StatusBar(Static):
         self.council_gate = status
         try:
             self.query_one("#council-glyph", Label).update(self._get_council_indicator())
+        except Exception:
+            pass
+
+    def update_social_carryover(self, enabled: bool):
+        """Update the social carryover indicator."""
+        self.social_carryover = enabled
+        try:
+            self.query_one("#social-glyph", Label).update(self._get_social_indicator())
         except Exception:
             pass
 
@@ -1135,6 +1205,73 @@ class SovwrenIDE(App):
     #editor-panel { width: 40%; height: 100%; border-right: solid #1a1a1a; background: #000000; }
     #chat-panel { width: 1fr; height: 100%; background: #000000; }
 
+    /* Spine container - primary cognitive workspace */
+    #spine { height: 1fr; width: 100%; }
+
+    /* Spine Content Switching (Tall layout) */
+    /* Chat content (NeuralStream + input) - visible by default */
+    #chat-content { height: 1fr; display: block; }
+    /* Inline spine editor for Tall layout - hidden by default */
+    #spine-editor { height: 1fr; display: none; }
+    #spine-editor TextArea { height: 100%; background: #050505; border: none; }
+    #spine-editor-toolbar {
+        height: 3;
+        background: #0a0a0a;
+        border-bottom: solid #1a1a1a;
+        align: left middle;
+        padding: 0 1;
+    }
+    #spine-editor-status { width: 1fr; text-align: right; color: #606060; }
+
+    /* Visibility is controlled via direct class on the containers themselves */
+    #chat-content.hidden { display: none; }
+    #spine-editor.visible { display: block; }
+
+
+
+    /* Bottom Dock - secondary intelligence (Tall layout) */
+    #bottom-dock {
+        height: auto;
+        max-height: 30%;
+        background: #050505;
+        border-top: solid #1a1a1a;
+        display: none;  /* Hidden by default (Wide layout) */
+    }
+    #bottom-dock Tabs { background: #0a0a0a; height: 2; }
+    #bottom-dock Tab { background: #0a0a0a; color: #606060; padding: 0 2; }
+    #bottom-dock Tab.-active { background: #1a1a1a; color: #a0a0a0; }
+    #bottom-dock TabPane { padding: 1; }
+
+    /* Layout Mode: Wide (default - three column) */
+    .layout-wide #sidebar-left { display: block; width: 18%; }
+    .layout-wide #editor-panel { display: block; width: 40%; }
+    .layout-wide #chat-panel { width: 1fr; }
+    .layout-wide #bottom-dock { display: none; }
+    .layout-wide ProtocolDeck { display: block; }
+
+    /* Layout Mode: Tall (vertical monitor - one spine, bottom dock) */
+    .layout-tall #sidebar-left { display: none; }
+    .layout-tall #editor-panel { display: none; }
+    .layout-tall #chat-panel { width: 100%; }
+    .layout-tall #bottom-dock { display: block; }
+    .layout-tall ProtocolDeck { display: none; }
+
+    /* Layout Mode: Compact (small window - same as tall but tighter) */
+    .layout-compact #sidebar-left { display: none; }
+    .layout-compact #editor-panel { display: none; }
+    .layout-compact #chat-panel { width: 100%; }
+    .layout-compact #bottom-dock { display: block; max-height: 25%; }
+    .layout-compact ProtocolDeck { display: none; }
+
+    /* User toggles (override layout defaults) */
+    .layout-wide.sidebar-hidden #sidebar-left { display: none; }
+    .layout-tall.dock-hidden #bottom-dock { display: none; }
+    .layout-compact.dock-hidden #bottom-dock { display: none; }
+
+    /* Layout indicator in Truth Strip */
+    .layout-forced #layout-indicator { color: #b0954a; }
+
+
     /* Right Panel Layout - ProtocolDeck with collapsible drawer */
     ProtocolDeck {
         height: auto;
@@ -1254,11 +1391,16 @@ class SovwrenIDE(App):
     #lens-blue.active { color: #4a7ab0; border: solid #4a7ab0; }
     #lens-red.active { color: #b04a4a; border: solid #b04a4a; }
     #lens-purple.active { color: #7a4ab0; border: solid #7a4ab0; }
+    #dock-lens-blue.active { color: #4a7ab0; border: solid #4a7ab0; }
+    #dock-lens-red.active { color: #b04a4a; border: solid #b04a4a; }
+    #dock-lens-purple.active { color: #7a4ab0; border: solid #7a4ab0; }
 
     /* Mode buttons */
     .mode-btn { min-width: 8; margin: 0; }
     #mode-workshop.active { color: #4a7ab0; border: solid #4a7ab0; }
     #mode-sanctuary.active { color: #8a6ab0; border: solid #8a6ab0; }
+    #dock-mode-workshop.active { color: #4a7ab0; border: solid #4a7ab0; }
+    #dock-mode-sanctuary.active { color: #8a6ab0; border: solid #8a6ab0; }
 
     /* Git buttons */
     .git-btn { min-width: 6; margin: 0; }
@@ -1405,7 +1547,7 @@ class SovwrenIDE(App):
         ("f3", "consent_check", "Consent"),
         ("f1", "show_help", "Help"),
         # Hidden bindings (work but don't clutter footer)
-        Binding("ctrl+b", "toggle_sidebar", "Toggle Sidebar", show=False),
+        Binding("ctrl+b", "toggle_sidebar", "Toggle Panels", show=False),
         Binding("ctrl+r", "sessions", "Sessions", show=False),
         Binding("ctrl+w", "close_tab", "Close Tab", show=False),
         Binding("f2", "models", "Models", show=False),
@@ -1415,6 +1557,16 @@ class SovwrenIDE(App):
         Binding("f7", "profiles", "Profiles", show=False),
         Binding("ctrl+o", "open_external", "Open in Editor", show=False),
         Binding("ctrl+j", "insert_newline", "Newline", show=False),
+        Binding("ctrl+k", "toggle_social_carryover", "Social Carryover", show=False),
+        # Layout and spine switching (Tall Layout Spec)
+        Binding("f8", "toggle_layout_override", "Toggle Layout", show=False),
+        Binding("alt+1", "spine_chat", "Chat Spine", show=False),
+        Binding("alt+2", "spine_editor", "Editor Spine", show=False),
+        Binding("alt+3", "spine_log", "Log Spine", show=False),
+        # F-keys as a fallback for terminals that swallow Alt+number
+        Binding("f9", "spine_chat", "Chat Spine", show=False),
+        Binding("f10", "spine_editor", "Editor Spine", show=False),
+        Binding("f11", "spine_log", "Log Spine", show=False),
     ]
 
     def get_system_commands(self, screen):
@@ -1438,6 +1590,7 @@ class SovwrenIDE(App):
     HISTORY_CONTEXT_TURNS = 5 # Number of recent conversation turns to include as context for Node
     PREF_LAST_SESSION_KEY = "last_session_id"  # Preference key for session resume
     PREF_LAST_PROFILE_KEY = "last_profile"  # Preference key for profile persistence
+    PREF_LAST_MODEL_KEY = "last_model"  # Preference key for model persistence
 
     # Known context windows for common models (in tokens)
     # Add models as you encounter them - this is a practical lookup, not exhaustive
@@ -1480,6 +1633,7 @@ class SovwrenIDE(App):
         self.session_lens = "Blue"
         self.idle_mode = False
         self.rag_debug_enabled = False  # RAG Debug Mode toggle
+        self.social_carryover = True    # Social Carryover: warm (True) or neutral (False)
 
         # Session management (initialized properly in _start_new_session/_resume_session)
         self.db = None
@@ -1522,27 +1676,63 @@ class SovwrenIDE(App):
         self._idle_dim_active = False
         self.IDLE_THRESHOLD = 45  # seconds before border dims (midpoint of 30-60)
 
+        # Layout system (Tall Layout Spec)
+        self._current_layout = "wide"  # "wide", "tall", "compact"
+        self._layout_override = None   # None = auto-detect, "wide"/"tall"/"compact" = forced
+        self._current_spine = "chat"   # "chat", "editor", "log" (for Tall layout spine switching)
+        self._spine_editor_file = None  # File path currently open in spine editor
+        self._spine_editor_original = ""  # Original content for dirty tracking
+        self._sidebar_hidden = False
+        self._dock_hidden = False
+        self._syncing_switches = False
+
+    def _update_last_context_displays(self, text: str) -> None:
+        """Update both sidebar and Tall-layout dock context panels."""
+        try:
+            self.query_one("#context-status", Static).update(text)
+        except Exception:
+            pass
+        try:
+            self.query_one("#dock-context-status", Static).update(text)
+        except Exception:
+            pass
+
+
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
         with Horizontal(id="main-layout"):
-            # Left: File Tree
+            # Left: File Tree (hidden in Tall layout)
             with Vertical(id="sidebar-left"):
                 yield WorkspaceTree()
 
-            # Center: Tabbed Editor
+            # Center: Tabbed Editor (hidden in Tall layout)
             with Vertical(id="editor-panel"):
                 yield TabbedEditor()
 
-            # Right: Chat + Controls
+            # Right: Chat + Controls (becomes full-width spine in Tall layout)
             with Vertical(id="chat-panel"):
                 yield ProtocolDeck()
-                yield NeuralStream()
-                with Container(id="input-container"):
-                    yield ChatInput(id="chat-input", show_line_numbers=False)
+                # Chat content (shown in spine-chat mode)
+                with Vertical(id="chat-content"):
+                    yield NeuralStream()
+                    with Container(id="input-container"):
+                        yield ChatInput(id="chat-input", show_line_numbers=False)
+                # Inline spine editor (shown in spine-editor mode, Tall layout only)
+                with Vertical(id="spine-editor"):
+                    with Horizontal(id="spine-editor-toolbar"):
+                        yield Button("💾", id="btn-spine-save", classes="editor-btn")
+                        yield Button("✕ Close", id="btn-spine-close", classes="editor-btn")
+                        yield Static("", id="spine-editor-status")
+                    yield TextArea("", id="spine-editor-textarea", show_line_numbers=True)
                 yield StatusBar()
 
+        # Bottom Dock (visible only in Tall/Compact layouts)
+        yield BottomDock(id="bottom-dock")
+
         yield Footer()
+
 
     async def on_mount(self) -> None:
         self.title = "Sovwren IDE v0.1"
@@ -1550,6 +1740,12 @@ class SovwrenIDE(App):
 
         # Set initial mode for border color
         self.add_class("mode-workshop")
+
+        # Set initial layout (Wide by default, on_resize will auto-detect)
+        self.add_class("layout-wide")
+
+        # Set initial spine mode (Chat visible, Editor hidden)
+        self.add_class("spine-chat")
 
         # Temporal empathy: start idle check timer (checks every 5 seconds)
         self.set_interval(5.0, self._check_idle_state)
@@ -1581,6 +1777,298 @@ class SovwrenIDE(App):
         """Continue startup after splash dismisses."""
         # Run the async startup in a task
         asyncio.create_task(self._initialize_app())
+
+    # --- LAYOUT SYSTEM (Tall Layout Spec) ---
+
+    def on_resize(self, event) -> None:
+        """Auto-detect layout based on aspect ratio."""
+        if self._layout_override:
+            return  # Respect forced layout
+
+        w, h = self.size.width, self.size.height
+        if h > w:
+            self.set_layout("tall")
+        elif w > h * 1.3:
+            self.set_layout("wide")
+        else:
+            self.set_layout("compact")
+
+    def set_layout(self, layout: str) -> None:
+        """Switch layout mode. Updates CSS classes and shows/hides widgets."""
+        if layout == self._current_layout:
+            return
+
+        old_layout = self._current_layout
+        self._current_layout = layout
+
+        # Remove old layout class, add new one
+        self.remove_class(f"layout-{old_layout}")
+        self.add_class(f"layout-{layout}")
+
+        # Show layout indicator if forced
+        if self._layout_override:
+            self.add_class("layout-forced")
+        else:
+            self.remove_class("layout-forced")
+
+        # Notify in chat (brief, not disruptive)
+        try:
+            stream = self.query_one(NeuralStream)
+            if layout == "tall":
+                stream.add_message("[dim]Layout: Tall (vertical) • Alt+1/2/3 (or F9–F11) to switch spine • Ctrl+B to hide dock[/dim]", "hint")
+            elif layout == "wide":
+                stream.add_message("[dim]Layout: Wide (three-column)[/dim]", "hint")
+            else:
+                stream.add_message("[dim]Layout: Compact[/dim]", "hint")
+        except Exception:
+            pass
+
+    def action_toggle_layout_override(self) -> None:
+        """F8: Toggle layout override (force Wide on Tall screen, etc.)."""
+        if self._layout_override:
+            # Clear override, return to auto-detect
+            self._layout_override = None
+            self.remove_class("layout-forced")
+            # Trigger re-detection
+            w, h = self.size.width, self.size.height
+            if h > w:
+                self.set_layout("tall")
+            elif w > h * 1.3:
+                self.set_layout("wide")
+            else:
+                self.set_layout("compact")
+            self.notify("Layout: Auto-detect restored", severity="information")
+        else:
+            # Force opposite of current
+            if self._current_layout == "tall":
+                self._layout_override = "wide"
+                self.set_layout("wide")
+            else:
+                self._layout_override = "tall"
+                self.set_layout("tall")
+            self.notify(f"Layout: Forced {self._layout_override} (F8 to restore auto)", severity="information")
+
+    def switch_spine(self, spine: str) -> None:
+        """Switch spine content in Tall layout between chat and editor.
+        
+        This is the core of 'One Spine, Many Organs' — only one thing visible at a time.
+        Uses Textual's display property directly for reliable visibility toggling.
+        """
+        if spine == self._current_spine:
+            return
+
+        self._current_spine = spine
+
+        # Toggle visibility using Textual's display property
+        try:
+            chat_content = self.query_one("#chat-content")
+            spine_editor = self.query_one("#spine-editor")
+
+            if spine == "editor":
+                chat_content.display = False
+                spine_editor.display = True
+            else:  # "chat" or any other
+                chat_content.display = True
+                spine_editor.display = False
+        except Exception as e:
+            self.notify(f"Spine switch error: {e}", severity="error")
+
+    def action_spine_chat(self) -> None:
+        """Alt+1 (or F9): Switch to Chat spine."""
+        if self._current_layout == "wide":
+            return  # Not needed in Wide layout
+
+        # Check if spine editor has unsaved changes
+        if self._spine_editor_file:
+            try:
+                textarea = self.query_one("#spine-editor-textarea", TextArea)
+                if textarea.text != self._spine_editor_original:
+                    self.notify("⚠️ Unsaved changes! Save with 💾 or close to discard", severity="warning")
+                    return
+            except Exception:
+                pass
+
+        self.switch_spine("chat")
+        self._spine_editor_file = None
+        self.notify("🗨️ Chat", severity="information")
+
+    def action_spine_editor(self) -> None:
+        """Alt+2 (or F10): Switch to Editor spine (opens last file if any, else prompts)."""
+        if self._current_layout == "wide":
+            return
+
+        if self._spine_editor_file:
+            # Already have a file open, just switch to editor
+            self.switch_spine("editor")
+            self.notify(f"📝 {Path(self._spine_editor_file).name}", severity="information")
+        else:
+            # If a file is highlighted in the tree, open it in the spine editor
+            if self.selected_file and Path(self.selected_file).is_file():
+                asyncio.create_task(self.open_file_in_spine(self.selected_file))
+                return
+
+            # No file selected/open, prompt to select from dock
+            try:
+                stream = self.query_one(NeuralStream)
+                stream.add_message("[dim]Select a file from Files tab in dock[/dim]", "hint")
+            except Exception:
+                pass
+
+    async def open_file_in_spine(self, file_path: str) -> None:
+        """Open a file in the inline spine editor (Tall layout)."""
+        file_path = str(Path(file_path).resolve())
+
+        # Read file content
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+        except Exception as e:
+            self.notify(f"Cannot open file: {e}", severity="error")
+            return
+
+        # Store for dirty tracking
+        self._spine_editor_file = file_path
+        self._spine_editor_original = content
+
+        # Update spine editor textarea
+        try:
+            textarea = self.query_one("#spine-editor-textarea", TextArea)
+            textarea.load_text(content)
+            
+            # Detect language for syntax highlighting
+            ext = Path(file_path).suffix.lower()
+            lang_map = {
+                ".py": "python", ".js": "javascript", ".ts": "typescript",
+                ".json": "json", ".md": "markdown", ".css": "css",
+                ".html": "html", ".yaml": "yaml", ".yml": "yaml",
+            }
+            if ext in lang_map:
+                textarea.language = lang_map[ext]
+
+            # Update status
+            status = self.query_one("#spine-editor-status", Static)
+            status.update(f"{Path(file_path).name}")
+        except Exception as e:
+            self.notify(f"Error loading file: {e}", severity="error")
+            return
+
+        # Switch to editor spine
+        self.switch_spine("editor")
+        self.notify(f"📝 {Path(file_path).name}", severity="information")
+
+    def action_spine_log(self) -> None:
+        """Alt+3 (or F11): Switch to Log/Debug spine (Tall layout)."""
+        if self._current_layout == "wide":
+            return
+        # Log spine not implemented yet, show hint
+        try:
+            stream = self.query_one(NeuralStream)
+            stream.add_message("[dim]Log spine: Debug panel in bottom dock (⋮ More → Debug)[/dim]", "hint")
+        except Exception:
+            pass
+
+    # --- FILE SELECTION HANDLERS ---
+
+    def on_directory_tree_node_selected(self, event) -> None:
+        """Track the currently highlighted node so spine/editor actions can use it."""
+        try:
+            path = getattr(event, "path", None)
+            if path is None:
+                return
+            path_str = str(path)
+            if Path(path_str).is_file():
+                self.selected_file = path_str
+        except Exception:
+            pass
+
+    async def on_directory_tree_file_selected(self, event) -> None:
+        """Handle file selection from DirectoryTree (both sidebar and dock)."""
+        from config import get_file_suggestion
+        file_path = str(event.path)
+        self.selected_file = file_path
+
+        # Check if file (not directory)
+        if not Path(file_path).is_file():
+            return
+
+        # Open in appropriate editor
+        try:
+            if self._current_layout in ("tall", "compact"):
+                await self.open_file_in_spine(file_path)
+            else:
+                editor = self.query_one(TabbedEditor)
+                await editor.open_file(file_path)
+        except Exception as e:
+            self.notify(f"Error opening file: {e}", severity="error")
+            return
+
+        rel_path = Path(file_path).name
+
+        # Notify chat stream + show suggestions
+        try:
+            stream = self.query_one(NeuralStream)
+            stream.add_message(f"[cyan]📄 Opened: {rel_path}[/cyan]", "system")
+
+            suggestion = get_file_suggestion(file_path)
+            if suggestion:
+                hint = suggestion.get("hint", "")
+                if hint:
+                    stream.add_message(f"[dim]💡 {hint}[/dim]", "system")
+        except Exception:
+            pass
+
+        # Update context display (if present)
+        try:
+            context_widget = self.query_one("#context-status", Static)
+            context_widget.update(f"[green]📄 {rel_path}[/green]")
+        except Exception:
+            pass
+
+    def on_button_pressed(self, event) -> None:
+        """Handle button presses throughout the app."""
+        button_id = event.button.id
+
+        # Spine editor buttons
+        if button_id == "btn-spine-save":
+            asyncio.create_task(self._save_spine_editor())
+        elif button_id == "btn-spine-close":
+            self._close_spine_editor()
+
+    async def _save_spine_editor(self) -> None:
+        """Save the current spine editor file."""
+        if not self._spine_editor_file:
+            self.notify("No file to save", severity="warning")
+            return
+
+        try:
+            textarea = self.query_one("#spine-editor-textarea", TextArea)
+            content = textarea.text
+
+            with open(self._spine_editor_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            self._spine_editor_original = content
+            self.notify(f"Saved: {Path(self._spine_editor_file).name}", severity="information")
+        except Exception as e:
+            self.notify(f"Save failed: {e}", severity="error")
+
+    def _close_spine_editor(self) -> None:
+        """Close the spine editor and return to chat spine."""
+        # Check for unsaved changes
+        if self._spine_editor_file:
+            try:
+                textarea = self.query_one("#spine-editor-textarea", TextArea)
+                if textarea.text != self._spine_editor_original:
+                    self.notify("⚠️ Unsaved changes will be lost", severity="warning")
+            except Exception:
+                pass
+
+        # Clear state and switch back to chat
+        self._spine_editor_file = None
+        self._spine_editor_original = ""
+        self.switch_spine("chat")
+        self.notify("🗨️ Chat", severity="information")
+
 
     async def _initialize_app(self) -> None:
         """Initialize database and complete startup (called after splash)."""
@@ -1848,10 +2336,11 @@ class SovwrenIDE(App):
         stream.add_message("[dim]  Ctrl+S   Save file[/dim]", "system")
         stream.add_message("[dim]  Ctrl+L   Clear chat[/dim]", "system")
         stream.add_message("[dim]  Ctrl+W   Close tab[/dim]", "system")
-        stream.add_message("[dim]  Ctrl+B   Toggle sidebar[/dim]", "system")
+        stream.add_message("[dim]  Ctrl+B   Toggle panels (Wide: sidebar, Tall: dock)[/dim]", "system")
         stream.add_message("[dim]  Ctrl+R   Sessions[/dim]", "system")
         stream.add_message("[dim]  Ctrl+O   Open in external editor[/dim]", "system")
         stream.add_message("[dim]  Ctrl+J   Insert newline[/dim]", "system")
+        stream.add_message("[dim]  Ctrl+K   Toggle social carryover (warm/neutral)[/dim]", "system")
         stream.add_message("[dim]  F1       This help[/dim]", "system")
         stream.add_message("[dim]  F2       Models[/dim]", "system")
         stream.add_message("[dim]  F3       Consent checkpoint[/dim]", "system")
@@ -1859,6 +2348,11 @@ class SovwrenIDE(App):
         stream.add_message("[dim]  F5       Toggle web search[/dim]", "system")
         stream.add_message("[dim]  F6       Toggle cloud council[/dim]", "system")
         stream.add_message("[dim]  F7       Profiles[/dim]", "system")
+        stream.add_message("[dim]  F8       Toggle layout override[/dim]", "system")
+        stream.add_message("[dim]  Alt+1    Tall: Chat spine[/dim]", "system")
+        stream.add_message("[dim]  Alt+2    Tall: Editor spine[/dim]", "system")
+        stream.add_message("[dim]  Alt+3    Tall: Log spine (hint)[/dim]", "system")
+        stream.add_message("[dim]  F9/F10/F11  Tall: Spine fallback keys[/dim]", "system")
 
         # Slash commands
         stream.add_message("[bold]Commands:[/bold]", "system")
@@ -2173,6 +2667,12 @@ class SovwrenIDE(App):
                         # Update context window estimate
                         ctx_window = self._get_model_context_window(new_model)
                         stream.add_message(f"[dim]Context window: ~{ctx_window:,} tokens[/dim]", "system")
+                        # Persist model choice for next startup
+                        if self.db:
+                            try:
+                                await self.db.set_preference(self.PREF_LAST_MODEL_KEY, new_model)
+                            except Exception:
+                                pass  # Silent fail — persistence is non-critical
                     else:
                         stream.add_message(f"[red]Failed to switch to {model_name}[/red]", "error")
                 except Exception as e:
@@ -2530,27 +3030,48 @@ class SovwrenIDE(App):
                 if models:
                     self.connected = True
 
-                    # Check for preferred model from profile
-                    preferred_model = None
-                    if self.current_profile:
+                    # Model selection priority:
+                    # 1. Saved last_model (if available in backend)
+                    # 2. Profile's preferred_model (if available in backend)
+                    # 3. First available model
+                    
+                    target_model = None
+                    model_source = None
+                    
+                    # Check for saved model from last session
+                    if self.db:
+                        try:
+                            saved_model = await self.db.get_preference(self.PREF_LAST_MODEL_KEY)
+                            if saved_model:
+                                # Look for exact or partial match
+                                matching = [m for m in models if saved_model.lower() in m.lower() or m.lower() in saved_model.lower()]
+                                if matching:
+                                    target_model = matching[0]
+                                    model_source = "saved"
+                        except Exception:
+                            pass
+                    
+                    # Fall back to profile's preferred model
+                    if not target_model and self.current_profile:
                         preferred_model = self.current_profile.get("preferred_model")
-
-                    # Try to switch to preferred model if available
-                    if preferred_model:
-                        # Look for partial match in available models
-                        matching = [m for m in models if preferred_model.lower() in m.lower()]
-                        if matching:
-                            target = matching[0]
-                            stream.add_message(f"[dim]Switching to preferred model: {target}[/dim]", "system")
-                            success = await self.llm_client.switch_model(target)
-                            if success:
-                                model_name = self.llm_client.current_model
+                        if preferred_model:
+                            matching = [m for m in models if preferred_model.lower() in m.lower()]
+                            if matching:
+                                target_model = matching[0]
+                                model_source = "preferred"
                             else:
-                                model_name = self.llm_client.current_model or models[0]
-                                stream.add_message(f"[yellow]Couldn't switch to preferred model, using {model_name}[/yellow]", "system")
+                                stream.add_message(f"[yellow]Preferred model '{preferred_model}' not found[/yellow]", "system")
+                    
+                    # Try to switch to target model
+                    if target_model:
+                        label = "last used" if model_source == "saved" else "preferred"
+                        stream.add_message(f"[dim]Switching to {label} model: {target_model}[/dim]", "system")
+                        success = await self.llm_client.switch_model(target_model)
+                        if success:
+                            model_name = self.llm_client.current_model
                         else:
                             model_name = self.llm_client.current_model or models[0]
-                            stream.add_message(f"[yellow]Preferred model '{preferred_model}' not found[/yellow]", "system")
+                            stream.add_message(f"[yellow]Couldn't switch to {label} model, using {model_name}[/yellow]", "system")
                     else:
                         model_name = self.llm_client.current_model or models[0]
 
@@ -2758,7 +3279,8 @@ class SovwrenIDE(App):
                     lens=self.session_lens,
                     idle=self.idle_mode,
                     context_band=current_band,
-                    context_first_warning=first_warning
+                    context_first_warning=first_warning,
+                    social_carryover=self.social_carryover
                 )
             else:
                 system_prompt = build_system_prompt(
@@ -2942,7 +3464,6 @@ class SovwrenIDE(App):
             context = "\n\n".join([p for p in context_parts if p and p.strip()]).strip()
 
             # Update context display with RAM vs RAG distinction
-            context_widget = self.query_one("#context-status", Static)
             display_lines = []
 
             # Always show conversation history (it's always in context)
@@ -2959,9 +3480,9 @@ class SovwrenIDE(App):
                     display_lines.append(f"[green]📄 {source}[/green]")
 
             if display_lines:
-                context_widget.update("\n".join(display_lines))
+                self._update_last_context_displays("\n".join(display_lines))
             else:
-                context_widget.update("[dim]No context loaded[/dim]")
+                self._update_last_context_displays("[dim]No context loaded[/dim]")
 
             # Generate response (pass conversation history for proper turn awareness)
             # Exclude the current message (already in prompt) from history
@@ -2975,8 +3496,15 @@ class SovwrenIDE(App):
             )
 
             if response:
-                stream.add_message(f"[b]‹[/b] {response}", "node")
-                # Track in conversation history
+                # Strip reasoning traces for clean display
+                display_text, reasoning_text = self._strip_reasoning_traces(response)
+                stream.add_message(f"[b]‹[/b] {display_text}", "node")
+                
+                # Show hint if reasoning was stripped
+                if reasoning_text:
+                    stream.add_message("[dim italic]💭 Reasoning trace hidden[/dim italic]", "system")
+                
+                # Track full response in conversation history (preserves reasoning for context)
                 self.conversation_history.append(("node", response))
                 self._trim_ram_history()
                 # Track what sources were used
@@ -3006,20 +3534,39 @@ class SovwrenIDE(App):
         stream = self.query_one(NeuralStream)
 
         # Lens buttons
-        if button_id in ("lens-blue", "lens-red", "lens-purple"):
-            # Remove active from all lens buttons, add to clicked one
-            for btn_id in ("lens-blue", "lens-red", "lens-purple"):
-                btn = self.query_one(f"#{btn_id}", Button)
-                btn.remove_class("active")
+        if button_id in (
+            "lens-blue",
+            "lens-red",
+            "lens-purple",
+            "dock-lens-blue",
+            "dock-lens-red",
+            "dock-lens-purple",
+        ):
+            # Remove active from all lens buttons (both main + dock), add to clicked one
+            for btn_id in (
+                "lens-blue",
+                "lens-red",
+                "lens-purple",
+                "dock-lens-blue",
+                "dock-lens-red",
+                "dock-lens-purple",
+            ):
+                try:
+                    btn = self.query_one(f"#{btn_id}", Button)
+                    btn.remove_class("active")
+                except Exception:
+                    pass
             event.button.add_class("active")
 
-            if button_id == "lens-blue":
+            lens_id = button_id.replace("dock-", "")
+
+            if lens_id == "lens-blue":
                 self.session_lens = "Blue"
                 stream.add_message("[dim]🔵 Grounded[/dim]", "system")
-            elif button_id == "lens-red":
+            elif lens_id == "lens-red":
                 self.session_lens = "Red"
                 stream.add_message("[dim]🔴 Processing[/dim]", "system")
-            elif button_id == "lens-purple":
+            elif lens_id == "lens-purple":
                 self.session_lens = "Purple"
                 stream.add_message("[dim]🟣 Symbolic[/dim]", "system")
                 # Ephemeral scaffolding: show one-time hint for first Purple activation
@@ -3027,23 +3574,35 @@ class SovwrenIDE(App):
                 hint = get_hint_message("purple_first")
                 if hint:
                     stream.add_message(f"    ↳ {hint}", "hint")
+
+            # Keep the other set visually in sync
+            try:
+                counterpart_id = f"dock-{lens_id}" if not button_id.startswith("dock-") else lens_id
+                self.query_one(f"#{counterpart_id}", Button).add_class("active")
+            except Exception:
+                pass
             # Update Truth Strip
             self.query_one(StatusBar).update_lens(self.session_lens)
 
         # Mode buttons
-        elif button_id in ("mode-workshop", "mode-sanctuary"):
-            # Remove active from all mode buttons, add to clicked one
-            for btn_id in ("mode-workshop", "mode-sanctuary"):
-                btn = self.query_one(f"#{btn_id}", Button)
-                btn.remove_class("active")
+        elif button_id in ("mode-workshop", "mode-sanctuary", "dock-mode-workshop", "dock-mode-sanctuary"):
+            # Remove active from all mode buttons (both main + dock), add to clicked one
+            for btn_id in ("mode-workshop", "mode-sanctuary", "dock-mode-workshop", "dock-mode-sanctuary"):
+                try:
+                    btn = self.query_one(f"#{btn_id}", Button)
+                    btn.remove_class("active")
+                except Exception:
+                    pass
             event.button.add_class("active")
 
-            if button_id == "mode-workshop":
+            mode_id = button_id.replace("dock-", "")
+
+            if mode_id == "mode-workshop":
                 self.remove_class("mode-sanctuary")
                 self.add_class("mode-workshop")
                 self.session_mode = "Workshop"
                 stream.add_message("[dim]🛠 Workshop[/dim]", "system")
-            elif button_id == "mode-sanctuary":
+            elif mode_id == "mode-sanctuary":
                 self.remove_class("mode-workshop")
                 self.add_class("mode-sanctuary")
                 self.session_mode = "Sanctuary"
@@ -3053,6 +3612,13 @@ class SovwrenIDE(App):
                 hint = get_hint_message("sanctuary_first")
                 if hint:
                     stream.add_message(f"    ↳ {hint}", "hint")
+
+            # Keep the other set visually in sync
+            try:
+                counterpart_id = f"dock-{mode_id}" if not button_id.startswith("dock-") else mode_id
+                self.query_one(f"#{counterpart_id}", Button).add_class("active")
+            except Exception:
+                pass
             # Update Truth Strip
             self.query_one(StatusBar).update_mode(self.session_mode)
 
@@ -3281,8 +3847,8 @@ Output ONLY valid JSON."""
             timestamp = datetime.now().strftime("%Y-%m-%d")
             filename = f"{timestamp}.md"
             
-            # Ensure directory exists (save to Sovwren/Bookmarks/)
-            save_dir = project_root / "Bookmarks"
+            # Ensure directory exists (save to workspace/Bookmarks/)
+            save_dir = project_root / "workspace" / "Bookmarks"
             save_dir.mkdir(parents=True, exist_ok=True)
 
             file_path = save_dir / filename
@@ -3301,6 +3867,9 @@ Output ONLY valid JSON."""
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         """Handle switch toggles."""
+        if self._syncing_switches:
+            return
+
         if event.switch.id == "toggle-idleness":
             self.idle_mode = event.value
             stream = self.query_one(NeuralStream)
@@ -3311,6 +3880,11 @@ Output ONLY valid JSON."""
                 sanctuary_btn = self.query_one("#mode-sanctuary", Button)
             except Exception:
                 workshop_btn = sanctuary_btn = None
+            try:
+                dock_workshop_btn = self.query_one("#dock-mode-workshop", Button)
+                dock_sanctuary_btn = self.query_one("#dock-mode-sanctuary", Button)
+            except Exception:
+                dock_workshop_btn = dock_sanctuary_btn = None
 
             if self.idle_mode:
                 # STATE TRANSITION: Idleness engaged (overrides mode)
@@ -3328,6 +3902,10 @@ Output ONLY valid JSON."""
                     workshop_btn.disabled = True
                 if sanctuary_btn:
                     sanctuary_btn.disabled = True
+                if dock_workshop_btn:
+                    dock_workshop_btn.disabled = True
+                if dock_sanctuary_btn:
+                    dock_sanctuary_btn.disabled = True
                 # Log event
                 asyncio.create_task(self._log_event("idleness_toggled", {"state": True, "suspended_mode": self.session_mode}))
             else:
@@ -3341,6 +3919,10 @@ Output ONLY valid JSON."""
                     workshop_btn.disabled = False
                 if sanctuary_btn:
                     sanctuary_btn.disabled = False
+                if dock_workshop_btn:
+                    dock_workshop_btn.disabled = False
+                if dock_sanctuary_btn:
+                    dock_sanctuary_btn.disabled = False
                 # Log event
                 asyncio.create_task(self._log_event("idleness_toggled", {"state": False, "restored_mode": self.session_mode}))
 
@@ -3352,13 +3934,25 @@ Output ONLY valid JSON."""
             else:
                 stream.add_message("[dim]🔍 RAG Debug: Off[/dim]", "system")
 
-        elif event.switch.id == "toggle-search-gate":
+        elif event.switch.id in ("toggle-search-gate", "dock-toggle-search-gate"):
             # Friction Class VI: Search Gate consent toggle
             if self.search_manager is None:
                 stream = self.query_one(NeuralStream)
                 stream.add_message("[yellow]Search Gate not available[/yellow]", "system")
-                # Reset switch to off
-                event.switch.value = False
+                # Reset both switches to off
+                self._syncing_switches = True
+                try:
+                    event.switch.value = False
+                    try:
+                        self.query_one("#toggle-search-gate", Switch).value = False
+                    except Exception:
+                        pass
+                    try:
+                        self.query_one("#dock-toggle-search-gate", Switch).value = False
+                    except Exception:
+                        pass
+                finally:
+                    self._syncing_switches = False
                 return
 
             stream = self.query_one(NeuralStream)
@@ -3378,13 +3972,39 @@ Output ONLY valid JSON."""
             status_bar = self.query_one(StatusBar)
             status_bar.update_search_gate(self.search_manager.state.status_text())
 
-        elif event.switch.id == "toggle-council-gate":
+            # Keep both switches visually in sync
+            self._syncing_switches = True
+            try:
+                try:
+                    self.query_one("#toggle-search-gate", Switch).value = self.search_gate_enabled
+                except Exception:
+                    pass
+                try:
+                    self.query_one("#dock-toggle-search-gate", Switch).value = self.search_gate_enabled
+                except Exception:
+                    pass
+            finally:
+                self._syncing_switches = False
+
+        elif event.switch.id in ("toggle-council-gate", "dock-toggle-council-gate"):
             # Friction Class VI extension: Council Gate consent toggle
             if self.council_client is None:
                 stream = self.query_one(NeuralStream)
                 stream.add_message("[yellow]Council Gate not available (no API key)[/yellow]", "system")
-                # Reset switch to off
-                event.switch.value = False
+                # Reset both switches to off
+                self._syncing_switches = True
+                try:
+                    event.switch.value = False
+                    try:
+                        self.query_one("#toggle-council-gate", Switch).value = False
+                    except Exception:
+                        pass
+                    try:
+                        self.query_one("#dock-toggle-council-gate", Switch).value = False
+                    except Exception:
+                        pass
+                finally:
+                    self._syncing_switches = False
                 return
 
             stream = self.query_one(NeuralStream)
@@ -3400,6 +4020,20 @@ Output ONLY valid JSON."""
                 self.council_gate_enabled = False
                 status_bar.update_council_gate("Off")
                 stream.add_message("[dim]☁️ Council Gate closed (local-only)[/dim]", "system")
+
+            # Keep both switches visually in sync
+            self._syncing_switches = True
+            try:
+                try:
+                    self.query_one("#toggle-council-gate", Switch).value = self.council_gate_enabled
+                except Exception:
+                    pass
+                try:
+                    self.query_one("#dock-toggle-council-gate", Switch).value = self.council_gate_enabled
+                except Exception:
+                    pass
+            finally:
+                self._syncing_switches = False
 
     def action_clear_chat(self) -> None:
         """Clear the chat stream and conversation history."""
@@ -3419,8 +4053,26 @@ Output ONLY valid JSON."""
         self._last_context_band = "~Low"  # Reset transition tracking
         self._update_context_band()
         # Reset context display
-        context_widget = self.query_one("#context-status", Static)
-        context_widget.update("[dim]No context loaded[/dim]")
+        self._update_last_context_displays("[dim]No context loaded[/dim]")
+
+    def action_toggle_social_carryover(self) -> None:
+        """Toggle Social Carryover (warm vs neutral stance).
+        
+        When On (warm): conversational stance, matching energy, core behavior active
+        When Off (neutral): neutral stance replaces warmth sections
+        
+        Key insight: "Posture lives in what you inject, not what the model remembers."
+        History is preserved; only warmth framing changes.
+        """
+        self.social_carryover = not self.social_carryover
+        stream = self.query_one(NeuralStream)
+        status_bar = self.query_one(StatusBar)
+        status_bar.update_social_carryover(self.social_carryover)
+        
+        if self.social_carryover:
+            stream.add_message("[dim]🤝 Social Carryover: On — warmth maintained[/dim]", "system")
+        else:
+            stream.add_message("[cyan]🔲 Social Carryover: Off — neutral ground[/cyan]", "system")
 
     def _trim_ram_history(self) -> None:
         """Keep RAM history bounded (DB remains the source of truth)."""
@@ -3488,9 +4140,19 @@ Output ONLY valid JSON."""
                 pass
 
     def action_toggle_sidebar(self) -> None:
-        """Toggle sidebar visibility."""
-        sidebar = self.query_one("#sidebar-left")
-        sidebar.display = not sidebar.display
+        """Toggle secondary panels (Wide: sidebar, Tall/Compact: bottom dock)."""
+        if self._current_layout == "wide":
+            self._sidebar_hidden = not self._sidebar_hidden
+            if self._sidebar_hidden:
+                self.add_class("sidebar-hidden")
+            else:
+                self.remove_class("sidebar-hidden")
+        else:
+            self._dock_hidden = not self._dock_hidden
+            if self._dock_hidden:
+                self.add_class("dock-hidden")
+            else:
+                self.remove_class("dock-hidden")
 
     def action_insert_newline(self) -> None:
         """Insert a newline into the chat input (Ctrl+J)."""
@@ -3499,6 +4161,61 @@ Output ONLY valid JSON."""
             chat_input.insert("\n")
         except Exception:
             pass
+
+    # --- RESPONSE PROCESSING ---
+
+    def _strip_reasoning_traces(self, response: str) -> tuple[str, str]:
+        """
+        Strip reasoning traces from model responses.
+        
+        Reasoning models often wrap thinking in tags like:
+        - <think>...</think>
+        - <reasoning>...</reasoning>
+        - <internal>...</internal>
+        
+        Some models (Nemotron) omit the opening tag, outputting:
+        - "reasoning text</think>actual response"
+        
+        Returns (display_text, reasoning_text) for future collapsible support.
+        """
+        import re
+        
+        reasoning_parts = []
+        display_text = response
+        
+        # Standard paired tag patterns (case-insensitive)
+        paired_patterns = [
+            r'<think>(.*?)</think>',
+            r'<thinking>(.*?)</thinking>',
+            r'<reasoning>(.*?)</reasoning>',
+            r'<internal>(.*?)</internal>',
+            r'<reflection>(.*?)</reflection>',
+        ]
+        
+        for pattern in paired_patterns:
+            matches = re.findall(pattern, display_text, re.DOTALL | re.IGNORECASE)
+            reasoning_parts.extend(matches)
+            display_text = re.sub(pattern, '', display_text, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Handle missing opening tag: everything before </think> is reasoning
+        # Pattern: "reasoning text</think>actual response" or "</tag>" at start
+        orphan_patterns = [
+            r'^(.*?)</think>',
+            r'^(.*?)</thinking>',
+            r'^(.*?)</reasoning>',
+        ]
+        
+        for pattern in orphan_patterns:
+            match = re.match(pattern, display_text, re.DOTALL | re.IGNORECASE)
+            if match:
+                reasoning_parts.append(match.group(1))
+                display_text = re.sub(pattern, '', display_text, count=1, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Clean up extra whitespace
+        display_text = re.sub(r'\n{3,}', '\n\n', display_text).strip()
+        reasoning_text = '\n\n'.join(reasoning_parts).strip()
+        
+        return display_text, reasoning_text
 
     # --- CONTEXT TRACKING (Phase 2) ---
 

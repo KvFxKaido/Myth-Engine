@@ -223,23 +223,16 @@ class LocalIngester:
     async def ingest_sovwren_corpus(self) -> Dict:
         """Ingest the full Sovwren symbolic corpus.
 
-        This follows the RAG-ROADMAP.md vision:
-        - Bookmarks
-        - Framework protocols
-        - Session logs
-        - Lore documents
+        RAG is scoped to the workspace folder to keep context focused.
         """
         print("=" * 50)
         print("SOVWREN CORPUS INGESTION")
         print("=" * 50)
 
         # Define corpus directories with their document types
-        # NOTE: Only NeMo's Bookmarks are ingested to avoid context bleed
-        # from Claude/Gemini/Ælya bookmarks that contain resolved issues or
-        # entity-specific patterns NeMo shouldn't try to "help" with.
+        # RAG is scoped to workspace folder only
         corpus_dirs = [
-            ("Bookmarks/NeMo", ["**/*.txt", "**/*.md"]),
-            (".", ["Sovwren Framework.md", "CLAUDE.md", "GEMINI.md", "AGENTS.md"]),
+            ("workspace/Bookmarks", ["**/*.txt", "**/*.md"]),
         ]
 
         total_stats = {
