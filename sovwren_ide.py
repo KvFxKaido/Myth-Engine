@@ -83,6 +83,33 @@ class BookmarkModal(Screen):
             self.dismiss(None)
 
 
+class FileImportModal(Screen):
+    """Consent gate: import external files into workspace/imports/."""
+
+    def __init__(self, files: list[Path]):
+        super().__init__()
+        self.files = files
+
+    def compose(self) -> ComposeResult:
+        yield Static("[b]Import files into workspace?[/b]")
+        yield Static(
+            "[dim]These files are outside `workspace/`. Sovwren will copy them into `workspace/imports/` and insert @refs.[/dim]"
+        )
+        for p in self.files[:8]:
+            yield Static(f"• {p}")
+        if len(self.files) > 8:
+            yield Static(f"[dim]...and {len(self.files) - 8} more[/dim]")
+        with Horizontal(id="dialog-buttons"):
+            yield Button("Cancel", id="btn-import-cancel", variant="error")
+            yield Button("Copy into workspace", id="btn-import-copy", variant="success")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-import-copy":
+            self.dismiss({"action": "copy"})
+        else:
+            self.dismiss({"action": "cancel"})
+
+
 class CommitModal(Screen):
     """Modal for entering git commit message."""
     CSS = """
@@ -2317,30 +2344,6 @@ class SovwrenIDE(App):
 
         self.notify(f"Imported {len(imported_refs)} file(s) into workspace/imports/", severity="information")
 
-
-class FileImportModal(Screen):
-    """Consent gate: import external files into workspace/imports/."""
-
-    def __init__(self, files: list[Path]):
-        super().__init__()
-        self.files = files
-
-    def compose(self) -> ComposeResult:
-        yield Static("[b]Import files into workspace?[/b]")
-        yield Static("[dim]These files are outside `workspace/`. Sovwren will copy them into `workspace/imports/` and insert @refs.[/dim]")
-        for p in self.files[:8]:
-            yield Static(f"• {p}")
-        if len(self.files) > 8:
-            yield Static(f"[dim]...and {len(self.files) - 8} more[/dim]")
-        with Horizontal():
-            yield Button("Copy into workspace", id="btn-import-copy", classes="action-btn action-btn-accent")
-            yield Button("Cancel", id="btn-import-cancel", classes="action-btn")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-import-copy":
-            self.dismiss({"action": "copy"})
-        else:
-            self.dismiss({"action": "cancel"})
 
     def _post_splash_startup(self, result) -> None:
         """Continue startup after splash dismisses."""
