@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import uuid
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -1175,35 +1176,38 @@ class ChatInput(TextArea):
         return paths
 
     def _on_paste(self, event: events.Paste) -> None:
-        """Handle paste, treating pure file-path pastes as @workspace-relative references."""
+        """Handle paste, treating pure file-path pastes as @workspace-relative references.
+
+        If pasted paths are outside `workspace/`, request explicit consent to copy them in.
+        """
         pasted = getattr(event, "text", "") or ""
         files = self._extract_pasted_file_paths(pasted)
         if not files:
             return super()._on_paste(event)
 
-        refs: list[str] = []
-        rejected: list[str] = []
+        in_refs: list[str] = []
+        external_files: list[Path] = []
         for file_path in files:
             try:
                 rel = file_path.relative_to(workspace_root).as_posix()
-                refs.append(f"@{rel}")
+                in_refs.append(f"@{rel}")
             except Exception:
-                rejected.append(str(file_path))
-
-        if not refs:
-            self.app.notify("Dropped file(s) are outside workspace; not attached", severity="warning")
-            return
+                external_files.append(file_path)
 
         # Insert references at cursor. Keep it explicit; no silent copying/importing.
         event.stop()
         event.prevent_default()
-        self.insert(" ".join(refs) + " ")
+        if in_refs:
+            self.insert(" ".join(in_refs) + " ")
         self._set_mention_visibility(False)
 
-        if rejected:
-            self.app.notify("Some dropped files were outside workspace; ignored", severity="warning")
-        else:
-            self.app.notify(f"Attached {len(refs)} file(s)", severity="information")
+        if external_files:
+            try:
+                self.app.request_workspace_import(external_files)
+            except Exception:
+                self.app.notify("Dropped file(s) are outside workspace; not attached", severity="warning")
+        elif in_refs:
+            self.app.notify(f"Attached {len(in_refs)} file(s)", severity="information")
 
     def _on_key(self, event: events.Key) -> None:
         """Handle Enter for submit."""
@@ -2068,15 +2072,7 @@ class SovwrenIDE(App):
 
         # Workspace file index (for @mentions in chat)
         self._workspace_file_index: list[str] = []
-        try:
-            paths: list[str] = []
-            for p in workspace_root.rglob("*"):
-                if p.is_file():
-                    rel = p.relative_to(workspace_root).as_posix()
-                    paths.append(rel)
-            self._workspace_file_index = sorted(paths)
-        except Exception:
-            self._workspace_file_index = []
+        self._build_workspace_file_index()
 
         # Initialize database early so we can read profile preference
         try:
@@ -2112,6 +2108,112 @@ class SovwrenIDE(App):
         # Show ritual entry splash with saved profile (threshold moment)
         # On dismiss, continue to _post_splash_startup
         self.push_screen(SplashScreen(profile=splash_profile), callback=self._post_splash_startup)
+
+    def _build_workspace_file_index(self) -> None:
+        """Build a workspace-relative file list for @mention suggestions."""
+        try:
+            paths: list[str] = []
+            for p in workspace_root.rglob("*"):
+                if p.is_file():
+                    paths.append(p.relative_to(workspace_root).as_posix())
+            self._workspace_file_index = sorted(paths)
+        except Exception:
+            self._workspace_file_index = []
+
+    def _add_to_workspace_file_index(self, rel_posix: str) -> None:
+        """Insert a new file into the mention index (keeps list sorted)."""
+        if not rel_posix:
+            return
+        if not hasattr(self, "_workspace_file_index") or self._workspace_file_index is None:
+            self._workspace_file_index = []
+        if rel_posix in self._workspace_file_index:
+            return
+        self._workspace_file_index.append(rel_posix)
+        self._workspace_file_index.sort()
+
+    def request_workspace_import(self, external_files: list[Path]) -> None:
+        """Prompt for consent to copy external files into workspace/imports/."""
+        files = [Path(p) for p in (external_files or [])]
+        files = [p for p in files if p.exists() and p.is_file()]
+        if not files:
+            self.notify("No valid files to import", severity="warning")
+            return
+        self.push_screen(FileImportModal(files), callback=lambda result: self._handle_file_import_result(result, files))
+
+    def _handle_file_import_result(self, result, files: list[Path]) -> None:
+        if not result or result.get("action") != "copy":
+            self.notify("Import canceled", severity="information")
+            return
+        asyncio.create_task(self._import_files_into_workspace(files))
+
+    async def _import_files_into_workspace(self, files: list[Path]) -> None:
+        """Copy external files into workspace/imports/ and insert @refs into chat input."""
+        dest_dir = workspace_root / "imports"
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.notify(f"Import failed: {e}", severity="error")
+            return
+
+        imported_refs: list[str] = []
+        for src in files:
+            try:
+                base = src.name
+                dest = dest_dir / base
+                if dest.exists():
+                    stem = dest.stem
+                    suffix = dest.suffix
+                    n = 2
+                    while True:
+                        candidate = dest_dir / f"{stem}-{n}{suffix}"
+                        if not candidate.exists():
+                            dest = candidate
+                            break
+                        n += 1
+
+                shutil.copy2(src, dest)
+                rel = dest.relative_to(workspace_root).as_posix()
+                imported_refs.append(f"@{rel}")
+                self._add_to_workspace_file_index(rel)
+            except Exception as e:
+                self.notify(f"Import failed: {src.name} ({e})", severity="error")
+
+        if not imported_refs:
+            return
+
+        try:
+            chat_input = self.query_one("#chat-input", ChatInput)
+            chat_input.insert(" ".join(imported_refs) + " ")
+            chat_input.focus()
+        except Exception:
+            pass
+
+        self.notify(f"Imported {len(imported_refs)} file(s) into workspace/imports/", severity="information")
+
+
+class FileImportModal(Screen):
+    """Consent gate: import external files into workspace/imports/."""
+
+    def __init__(self, files: list[Path]):
+        super().__init__()
+        self.files = files
+
+    def compose(self) -> ComposeResult:
+        yield Static("[b]Import files into workspace?[/b]")
+        yield Static("[dim]These files are outside `workspace/`. Sovwren will copy them into `workspace/imports/` and insert @refs.[/dim]")
+        for p in self.files[:8]:
+            yield Static(f"• {p}")
+        if len(self.files) > 8:
+            yield Static(f"[dim]...and {len(self.files) - 8} more[/dim]")
+        with Horizontal():
+            yield Button("Copy into workspace", id="btn-import-copy", classes="action-btn action-btn-accent")
+            yield Button("Cancel", id="btn-import-cancel", classes="action-btn")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-import-copy":
+            self.dismiss({"action": "copy"})
+        else:
+            self.dismiss({"action": "cancel"})
 
     def _post_splash_startup(self, result) -> None:
         """Continue startup after splash dismisses."""
