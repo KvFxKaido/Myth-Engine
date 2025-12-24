@@ -1867,6 +1867,7 @@ class SovwrenIDE(App):
         color: #505050;
         dock: bottom;
         height: 1;
+        margin-top: 1;
     }
     FooterKey {
         background: #0a0a0a;
