@@ -681,14 +681,23 @@ class ProtocolDeck(Vertical):
             yield Label("[b]Lens[/b]", classes="panel-header")
             with Horizontal(classes="button-row"):
                 blue_btn = Button("🔵", id="lens-blue", classes="lens-btn active")
-                blue_btn.tooltip = "Blue — Analytical"
+                blue_btn.tooltip = "Blue - Analytical"
                 yield blue_btn
                 red_btn = Button("🔴", id="lens-red", classes="lens-btn")
-                red_btn.tooltip = "Red — Direct"
+                red_btn.tooltip = "Red - Direct"
                 yield red_btn
                 purple_btn = Button("🟣", id="lens-purple", classes="lens-btn")
-                purple_btn.tooltip = "Purple — Reflective"
+                purple_btn.tooltip = "Purple - Reflective"
                 yield purple_btn
+
+            yield Label("[b]Initiative[/b]", classes="panel-header panel-header-spaced")
+            with Horizontal(classes="button-row"):
+                init_btn = Button("Init: N", id="btn-initiative-cycle", classes="action-btn")
+                init_btn.tooltip = "Cycle initiative (Low/Normal/High)"
+                yield init_btn
+                init_default_btn = Button("★ Default", id="btn-initiative-default", classes="action-btn")
+                init_default_btn.tooltip = "Save current initiative as default"
+                yield init_default_btn
 
             yield Label("[b]Actions[/b]", classes="panel-header")
             with Horizontal(classes="button-row"):
@@ -755,6 +764,13 @@ class BottomDock(Vertical):
             with TabPane("📁 Files", id="dock-files"):
                 yield DirectoryTree(str(workspace_root), id="dock-file-tree")
             
+            with TabPane("✍ Editor", id="dock-editor"):
+                with Horizontal(id="dock-editor-toolbar"):
+                    yield Button("💾 Save", id="btn-dock-save", classes="editor-btn")
+                    yield Button("⬆ Expand", id="btn-dock-expand", classes="editor-btn")
+                    yield Static("[dim]No file loaded[/dim]", id="dock-editor-status")
+                yield TextArea("", id="dock-editor-textarea", show_line_numbers=True)
+
             with TabPane("📋 Context", id="dock-context"):
                 yield Static("[dim]No context loaded[/dim]", id="dock-context-status")
                 yield Static("", id="dock-memory-status")
@@ -780,6 +796,12 @@ class BottomDock(Vertical):
                     yield Button("🔵", id="dock-lens-blue", classes="lens-btn active")
                     yield Button("🔴", id="dock-lens-red", classes="lens-btn")
                     yield Button("🟣", id="dock-lens-purple", classes="lens-btn")
+
+                # Initiative
+                yield Label("[b]Initiative[/b]", classes="panel-header")
+                with Horizontal(classes="button-row"):
+                    yield Button("Init: N", id="dock-btn-initiative-cycle", classes="action-btn")
+                    yield Button("★ Default", id="dock-btn-initiative-default", classes="action-btn")
                 
                 # Actions
                 yield Label("[b]Actions[/b]", classes="panel-header")
@@ -812,6 +834,7 @@ class StatusBar(Static):
     mode = reactive("Workshop")  # "Workshop" or "Sanctuary"
     lens = reactive("Blue")  # "Blue", "Red", or "Purple"
     social_carryover = reactive(True)  # True = warm, False = neutral
+    initiative = reactive("Normal")  # "Low", "Normal", or "High"
 
     # Moon phases for context load: empty → filling → half → full
     CONTEXT_GLYPHS = {
@@ -828,6 +851,12 @@ class StatusBar(Static):
         "Purple": "🟣",
     }
 
+    INITIATIVE_GLYPHS = {
+        "Low": "L",
+        "Normal": "N",
+        "High": "H",
+    }
+
     def _get_context_glyph(self) -> str:
         """Get moon glyph for current context band."""
         if "Critical" in self.context_band:
@@ -841,6 +870,10 @@ class StatusBar(Static):
     def _get_lens_glyph(self) -> str:
         """Get lens glyph for compact display."""
         return self.LENS_GLYPHS.get(self.lens, "🔵")
+
+    def _get_initiative_glyph(self) -> str:
+        """Get initiative glyph for compact display."""
+        return self.INITIATIVE_GLYPHS.get(self.initiative, "N")
 
     def _get_search_indicator(self) -> str:
         """Get search gate indicator."""
@@ -869,7 +902,8 @@ class StatusBar(Static):
     def _build_status_text(self) -> str:
         """Build Truth Strip: Mode | Lens | Node | Connected."""
         status = "Connected" if self.connected else "Disconnected"
-        return f"{self.mode} | {self.profile_name}: {self.model_name} | {status}"
+        init = self.INITIATIVE_GLYPHS.get(self.initiative, "N")
+        return f"{self.mode} | Init:{init} | {self.profile_name}: {self.model_name} | {status}"
 
     def compose(self) -> ComposeResult:
         # Truth Strip layout: [Mode] [Lens] [Social] [Context●] [🔒/🌐] [☁️] [Node info]
@@ -877,6 +911,7 @@ class StatusBar(Static):
             yield Label(self._get_mode_indicator(), id="mode-glyph")
             yield Label(self._get_lens_glyph(), id="lens-glyph")
             yield Label(self._get_social_indicator(), id="social-glyph")
+            yield Label(self._get_initiative_glyph(), id="initiative-glyph")
             yield Label(self._get_context_glyph(), id="context-glyph")
             yield Label(self._get_search_indicator(), id="search-glyph")
             yield Label(self._get_council_indicator(), id="council-glyph")
@@ -938,6 +973,15 @@ class StatusBar(Static):
         self.social_carryover = enabled
         try:
             self.query_one("#social-glyph", Label).update(self._get_social_indicator())
+        except Exception:
+            pass
+
+    def update_initiative(self, initiative: str):
+        """Update the initiative indicator."""
+        self.initiative = initiative
+        try:
+            self.query_one("#initiative-glyph", Label).update(self._get_initiative_glyph())
+            self._refresh_status_text()
         except Exception:
             pass
 
@@ -1193,6 +1237,7 @@ class SovwrenIDE(App):
 
     Screen {
         layout: vertical;
+        align: center top;
         background: #000000;
         /* Dark minimal scrollbar - nearly invisible until needed */
         scrollbar-background: #000000;
@@ -1238,22 +1283,42 @@ class SovwrenIDE(App):
     #bottom-dock {
         height: auto;
         max-height: 30%;
+        width: 100%;
         background: #050505;
         border-top: solid #1a1a1a;
-        display: none;  /* Hidden by default (Wide layout) */
+        display: none;  /* Hidden by default */
     }
     #bottom-dock Tabs { background: #0a0a0a; height: 2; }
     #bottom-dock Tab { background: #0a0a0a; color: #606060; padding: 0 2; }
     #bottom-dock Tab.-active { background: #1a1a1a; color: #a0a0a0; }
     #bottom-dock TabPane { padding: 1; }
 
+    /* Dock Editor */
+    #dock-editor-toolbar {
+        height: 3;
+        background: #0a0a0a;
+        border-bottom: solid #1a1a1a;
+        align: left middle;
+        padding: 0 1;
+    }
+    #dock-editor-status { width: 1fr; text-align: right; color: #606060; }
+    #dock-editor TextArea { height: 1fr; background: #050505; border: none; }
+
     /* Landscape: same spine, more air around it
        Rule: "Landscape stretches space, not functionality." */
-    .landscape #main-layout { padding: 0 5; }
+    .landscape #main-layout { padding: 0 2; }
+    .landscape #chat-panel { max-width: 100; }
     .portrait #main-layout { padding: 0; }
 
     /* BottomDock - toggle-based visibility (Ctrl+B), not layout-based */
     .dock-visible #bottom-dock { display: block; }
+
+    /* Dock expansion: give the dock the spine and hide chat */
+    .dock-expanded #chat-content { display: none; }
+    .dock-expanded #spine-editor { display: none; }
+    .dock-expanded #bottom-dock { height: 1fr; max-height: 1fr; }
+    .dock-expanded #bottom-dock TabPane { height: 1fr; }
+    .dock-expanded #dock-editor-textarea { height: 1fr; }
 
 
     /* Right Panel Layout - ProtocolDeck with collapsible drawer */
@@ -1356,6 +1421,27 @@ class SovwrenIDE(App):
         color: #808080;
     }
 
+    /* Switch widgets (toggles) - AMOLED styling */
+    Switch {
+        background: #1a1a1a;
+        border: none;
+        height: 1;
+        width: 4;
+        margin-right: 2;
+    }
+    Switch > .switch--slider {
+        background: #606060;
+    }
+    Switch:hover > .switch--slider {
+        background: #808080;
+    }
+    Switch.-on > .switch--slider {
+        background: #4a7ab0;
+    }
+    Switch.-on:hover > .switch--slider {
+        background: #5a8ac0;
+    }
+
     /* All buttons: AMOLED base */
     Button {
         background: #0a0a0a;
@@ -1454,8 +1540,14 @@ class SovwrenIDE(App):
         height: 1;
         width: 100%;
     }
+    /* Truth Strip glyphs - fixed width to prevent expansion */
+    #mode-glyph, #lens-glyph, #social-glyph, #initiative-glyph, #search-glyph, #council-glyph {
+        width: auto;
+        margin-right: 1;
+        color: #909090;
+    }
     #context-glyph {
-        width: 3;
+        width: auto;
         color: #909090;
         margin-right: 1;
     }
@@ -1542,6 +1634,8 @@ class SovwrenIDE(App):
         Binding("ctrl+o", "open_external", "Open in Editor", show=False),
         Binding("ctrl+j", "insert_newline", "Newline", show=False),
         Binding("ctrl+k", "toggle_social_carryover", "Social Carryover", show=False),
+        Binding("ctrl+i", "cycle_initiative", "Cycle Initiative", show=False),
+        Binding("ctrl+shift+i", "set_initiative_default", "Set Initiative Default", show=False),
         # Spine switching (works in both portrait and landscape)
         Binding("alt+1", "spine_chat", "Chat Spine", show=False),
         Binding("alt+2", "spine_editor", "Editor Spine", show=False),
@@ -1574,6 +1668,7 @@ class SovwrenIDE(App):
     PREF_LAST_SESSION_KEY = "last_session_id"  # Preference key for session resume
     PREF_LAST_PROFILE_KEY = "last_profile"  # Preference key for profile persistence
     PREF_LAST_MODEL_KEY = "last_model"  # Preference key for model persistence
+    PREF_INITIATIVE_DEFAULT_KEY = "initiative_default"  # Preference key for initiative default (Low/Normal/High)
 
     # Known context windows for common models (in tokens)
     # Add models as you encounter them - this is a practical lookup, not exhaustive
@@ -1669,6 +1764,16 @@ class SovwrenIDE(App):
         self._dock_hidden = False
         self._syncing_switches = False
 
+        # Dock editor state
+        self._dock_editor_file = None
+        self._dock_editor_original = ""
+
+        # Initiative (global default + per-session override)
+        self._initiative_default = "Normal"   # Persisted preference
+        self._initiative_current = "Normal"   # Session preference (desired)
+        self._initiative_overridden = False   # True if changed this session
+        self._initiative_forced_low = False   # Idle forces effective Low, restores automatically
+
     def _update_last_context_displays(self, text: str) -> None:
         """Update both sidebar and Tall-layout dock context panels."""
         try:
@@ -1696,7 +1801,6 @@ class SovwrenIDE(App):
 
             # Right: Chat + Controls (becomes full-width spine in Tall layout)
             with Vertical(id="chat-panel"):
-                yield ProtocolDeck()
                 # Chat content (shown in spine-chat mode)
                 with Vertical(id="chat-content"):
                     yield NeuralStream()
@@ -1710,9 +1814,8 @@ class SovwrenIDE(App):
                         yield Static("", id="spine-editor-status")
                     yield TextArea("", id="spine-editor-textarea", show_line_numbers=True)
                 yield StatusBar()
-
-        # Bottom Dock (visible only in Tall/Compact layouts)
-        yield BottomDock(id="bottom-dock")
+                # Bottom Dock (Tall/Compact; shares spine width/centering)
+                yield BottomDock(id="bottom-dock")
 
         yield Footer()
 
@@ -1751,6 +1854,18 @@ class SovwrenIDE(App):
                     self.current_profile_name = saved_profile
             except Exception:
                 pass
+
+            # Load initiative default (Low/Normal/High)
+            try:
+                saved_initiative = await self.db.get_preference(self.PREF_INITIATIVE_DEFAULT_KEY, default="Normal")
+                if saved_initiative in ("Low", "Normal", "High"):
+                    self._initiative_default = saved_initiative
+                    self._initiative_current = saved_initiative
+            except Exception:
+                pass
+
+        # Initialize initiative UI (Truth Strip + buttons)
+        self._apply_initiative_mode_defaults()
 
         # Show ritual entry splash with saved profile (threshold moment)
         # On dismiss, continue to _post_splash_startup
@@ -1791,6 +1906,70 @@ class SovwrenIDE(App):
         else:
             self.add_class("dock-visible")
             self.notify("📦 Dock visible (Ctrl+B to hide)", severity="information")
+
+    def _effective_initiative(self) -> str:
+        """Get effective initiative, respecting temporary Idle forcing."""
+        if self.idle_mode or self._initiative_forced_low:
+            return "Low"
+        return self._initiative_current
+
+    def _refresh_initiative_ui(self) -> None:
+        """Sync initiative indicators/buttons to current effective state."""
+        effective = self._effective_initiative()
+        glyph = StatusBar.INITIATIVE_GLYPHS.get(effective, "N")
+
+        try:
+            self.query_one(StatusBar).update_initiative(effective)
+        except Exception:
+            pass
+
+        for btn_id in ("btn-initiative-cycle", "dock-btn-initiative-cycle"):
+            try:
+                btn = self.query_one(f"#{btn_id}", Button)
+                btn.label = f"Init: {glyph}"
+            except Exception:
+                pass
+
+    def _apply_initiative_mode_defaults(self) -> None:
+        """Apply mode-driven initiative defaults unless user overrode this session."""
+        if self._initiative_overridden:
+            return
+
+        if self.session_mode == "Sanctuary":
+            self._initiative_current = "Low"
+        else:
+            self._initiative_current = self._initiative_default
+
+        self._refresh_initiative_ui()
+
+    def action_cycle_initiative(self) -> None:
+        """Cycle initiative: Low → Normal → High."""
+        levels = ("Low", "Normal", "High")
+        current = self._initiative_current if self._initiative_current in levels else "Normal"
+        idx = levels.index(current)
+        self._initiative_current = levels[(idx + 1) % len(levels)]
+        self._initiative_overridden = True
+        self._refresh_initiative_ui()
+
+        if self._effective_initiative() != self._initiative_current:
+            self.notify(f"Initiative queued: {self._initiative_current} (Idle forcing Low)", severity="information")
+        else:
+            self.notify(f"Initiative: {self._initiative_current}", severity="information")
+
+    async def action_set_initiative_default(self) -> None:
+        """Persist the current initiative as the global default."""
+        if self._initiative_current not in ("Low", "Normal", "High"):
+            self.notify("Invalid initiative value", severity="error")
+            return
+
+        self._initiative_default = self._initiative_current
+        try:
+            if self.db:
+                await self.db.set_preference(self.PREF_INITIATIVE_DEFAULT_KEY, self._initiative_default)
+        except Exception:
+            pass
+
+        self.notify(f"Initiative default saved: {self._initiative_default}", severity="information")
 
     def switch_spine(self, spine: str) -> None:
         """Switch spine content in Tall layout between chat and editor.
@@ -1931,16 +2110,8 @@ class SovwrenIDE(App):
         if not Path(file_path).is_file():
             return
 
-        # Open in appropriate editor
-        try:
-            if self._current_layout in ("tall", "compact"):
-                await self.open_file_in_spine(file_path)
-            else:
-                editor = self.query_one(TabbedEditor)
-                await editor.open_file(file_path)
-        except Exception as e:
-            self.notify(f"Error opening file: {e}", severity="error")
-            return
+        # Load into dock editor (scrollable, editable)
+        await self.open_file_in_dock_editor(file_path)
 
         rel_path = Path(file_path).name
 
@@ -1961,6 +2132,12 @@ class SovwrenIDE(App):
         try:
             context_widget = self.query_one("#context-status", Static)
             context_widget.update(f"[green]📄 {rel_path}[/green]")
+        except Exception:
+            pass
+
+        # Log the file access
+        try:
+            await self._log_event("file_opened", {"path": file_path})
         except Exception:
             pass
 
@@ -1998,6 +2175,96 @@ class SovwrenIDE(App):
         self._spine_editor_original = ""
         self.switch_spine("chat")
         self.notify("🗨️ Chat", severity="information")
+
+    async def open_file_in_dock_editor(self, file_path: str) -> None:
+        """Load a file into the dock editor TextArea."""
+        file_path = str(Path(file_path).resolve())
+
+        # Guard against discarding unsaved changes
+        if self._dock_editor_file:
+            try:
+                textarea = self.query_one("#dock-editor-textarea", TextArea)
+                if textarea.text != self._dock_editor_original:
+                    self.notify("Unsaved changes in dock editor — save before switching files", severity="warning")
+                    return
+            except Exception:
+                pass
+
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except Exception as e:
+            self.notify(f"Cannot open file: {e}", severity="error")
+            return
+
+        self._dock_editor_file = file_path
+        self._dock_editor_original = content
+
+        try:
+            textarea = self.query_one("#dock-editor-textarea", TextArea)
+            textarea.load_text(content)
+
+            ext = Path(file_path).suffix.lower()
+            lang_map = {
+                ".py": "python",
+                ".js": "javascript",
+                ".ts": "typescript",
+                ".json": "json",
+                ".md": "markdown",
+                ".css": "css",
+                ".html": "html",
+                ".yaml": "yaml",
+                ".yml": "yaml",
+            }
+            if ext in lang_map:
+                textarea.language = lang_map[ext]
+
+            status = self.query_one("#dock-editor-status", Static)
+            status.update(f"{Path(file_path).name}")
+        except Exception:
+            pass
+
+        # Make sure the dock is visible and on the Editor tab
+        self.add_class("dock-visible")
+        try:
+            dock_tabs = self.query_one("#dock-tabs", TabbedContent)
+            dock_tabs.active = "dock-editor"
+        except Exception:
+            pass
+
+    async def _save_dock_editor(self) -> None:
+        """Save the current dock editor file."""
+        if not self._dock_editor_file:
+            self.notify("No dock file to save", severity="warning")
+            return
+
+        try:
+            textarea = self.query_one("#dock-editor-textarea", TextArea)
+            content = textarea.text
+
+            with open(self._dock_editor_file, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            self._dock_editor_original = content
+            self.notify(f"Saved: {Path(self._dock_editor_file).name}", severity="information")
+        except Exception as e:
+            self.notify(f"Save failed: {e}", severity="error")
+
+    def _toggle_dock_expanded(self) -> None:
+        """Toggle dock expansion (hides chat, gives dock the spine)."""
+        self.add_class("dock-visible")
+        if self.has_class("dock-expanded"):
+            self.remove_class("dock-expanded")
+            label = "⬆ Expand"
+        else:
+            self.add_class("dock-expanded")
+            label = "⬇ Collapse"
+
+        try:
+            btn = self.query_one("#btn-dock-expand", Button)
+            btn.label = label
+        except Exception:
+            pass
 
 
     async def _initialize_app(self) -> None:
@@ -2301,10 +2568,11 @@ class SovwrenIDE(App):
             stream.add_message("[yellow]Search Gate not available (no providers configured)[/yellow]", "system")
             return
 
-        # Sync the toggle switch - the switch handler will update state and display messages
+        # Toggle the switch - the handler shows messages, so just flip it
         try:
             switch = self.query_one("#toggle-search-gate", Switch)
-            switch.value = not switch.value
+            # Setting value triggers on_switch_changed which handles everything
+            switch.value = not self.search_gate_enabled
         except Exception:
             pass
 
@@ -2315,10 +2583,11 @@ class SovwrenIDE(App):
             stream.add_message("[yellow]Council Gate not available (not initialized)[/yellow]", "system")
             return
 
-        # Sync the toggle switch - the switch handler will update state and display messages
+        # Toggle the switch - the handler shows messages, so just flip it
         try:
             switch = self.query_one("#toggle-council-gate", Switch)
-            switch.value = not switch.value
+            # Setting value triggers on_switch_changed which handles everything
+            switch.value = not self.council_gate_enabled
         except Exception:
             pass
 
@@ -3208,6 +3477,7 @@ class SovwrenIDE(App):
                     mode=self.session_mode,
                     lens=self.session_lens,
                     idle=self.idle_mode,
+                    initiative=self._effective_initiative(),
                     context_band=current_band,
                     context_first_warning=first_warning,
                     social_carryover=self.social_carryover
@@ -3217,6 +3487,7 @@ class SovwrenIDE(App):
                     mode=self.session_mode,
                     lens=self.session_lens,
                     idle=self.idle_mode,
+                    initiative=self._effective_initiative(),
                     context_band=current_band,
                     context_first_warning=first_warning
                 )
@@ -3471,6 +3742,22 @@ class SovwrenIDE(App):
             self._close_spine_editor()
             return
 
+        # Dock editor buttons
+        if button_id == "btn-dock-save":
+            await self._save_dock_editor()
+            return
+        if button_id == "btn-dock-expand":
+            self._toggle_dock_expanded()
+            return
+
+        # Initiative buttons
+        if button_id in ("btn-initiative-cycle", "dock-btn-initiative-cycle"):
+            self.action_cycle_initiative()
+            return
+        if button_id in ("btn-initiative-default", "dock-btn-initiative-default"):
+            await self.action_set_initiative_default()
+            return
+
         # Lens buttons
         if button_id in (
             "lens-blue",
@@ -3559,6 +3846,7 @@ class SovwrenIDE(App):
                 pass
             # Update Truth Strip
             self.query_one(StatusBar).update_mode(self.session_mode)
+            self._apply_initiative_mode_defaults()
 
         # Protocol buttons
         elif button_id in ("btn-bookmark", "dock-bookmark-btn"):
@@ -3583,56 +3871,6 @@ class SovwrenIDE(App):
             await self._queue_git_confirm("commit")
         elif button_id == "btn-git-push":
             await self._queue_git_confirm("push")
-
-    async def on_directory_tree_file_selected(self, event) -> None:
-        """Handle file selection in the workspace tree.
-
-        Opens the file in the tabbed editor for editing.
-        Also notifies the chat stream and shows mode/lens suggestions.
-        """
-        from config import get_file_suggestion
-
-        file_path = str(event.path)
-        self.selected_file = file_path
-
-        # Check if it's actually a file (not directory)
-        if not event.path.is_file():
-            return
-
-        # Open in tabbed editor
-        try:
-            editor = self.query_one(TabbedEditor)
-            await editor.open_file(file_path)
-        except Exception as e:
-            self.notify(f"Cannot open file: {e}", severity="error")
-            return
-
-        # Get relative path for display
-        rel_path = event.path.name
-
-        # Notify chat stream
-        try:
-            stream = self.query_one(NeuralStream)
-            stream.add_message(f"[cyan]📄 Opened: {rel_path}[/cyan]", "system")
-
-            # Check for mode/lens suggestion
-            suggestion = get_file_suggestion(file_path)
-            if suggestion:
-                hint = suggestion.get('hint', '')
-                if hint:
-                    stream.add_message(f"[dim]💡 {hint}[/dim]", "system")
-        except Exception:
-            pass
-
-        # Update context display
-        try:
-            context_widget = self.query_one("#context-status", Static)
-            context_widget.update(f"[green]📄 {rel_path}[/green]")
-        except Exception:
-            pass
-
-        # Log the file access
-        await self._log_event("file_opened", {"path": file_path})
 
     def action_open_external(self) -> None:
         """Open the selected file in the system's default editor."""
@@ -3846,6 +4084,10 @@ Output ONLY valid JSON."""
                     dock_sanctuary_btn.disabled = True
                 # Log event
                 asyncio.create_task(self._log_event("idleness_toggled", {"state": True, "suspended_mode": self.session_mode}))
+                # If we're already in the dimmed-idle window, force initiative Low immediately
+                if self._idle_dim_active and not self._initiative_forced_low:
+                    self._initiative_forced_low = True
+                self._refresh_initiative_ui()
             else:
                 # STATE TRANSITION: Idleness released (mode auto-restores)
                 stream.add_message(
@@ -3863,6 +4105,9 @@ Output ONLY valid JSON."""
                     dock_sanctuary_btn.disabled = False
                 # Log event
                 asyncio.create_task(self._log_event("idleness_toggled", {"state": False, "restored_mode": self.session_mode}))
+                if self._initiative_forced_low:
+                    self._initiative_forced_low = False
+                self._refresh_initiative_ui()
 
         elif event.switch.id == "toggle-rag-debug":
             self.rag_debug_enabled = event.value
@@ -4208,6 +4453,9 @@ Output ONLY valid JSON."""
                 stream.remove_class("idle-dim")
             except Exception:
                 pass
+            if self._initiative_forced_low:
+                self._initiative_forced_low = False
+                self._refresh_initiative_ui()
 
     def _check_idle_state(self) -> None:
         """Check if user has been idle and dim border accordingly.
@@ -4225,6 +4473,9 @@ Output ONLY valid JSON."""
                 stream.add_class("idle-dim")
             except Exception:
                 pass
+            if self.idle_mode and not self._initiative_forced_low:
+                self._initiative_forced_low = True
+                self._refresh_initiative_ui()
 
     def _update_context_band(self) -> str:
         """Update the context band display and return current band.
