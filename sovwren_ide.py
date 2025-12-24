@@ -753,6 +753,9 @@ class ProtocolDeck(Vertical):
             with Horizontal(classes="toggle-row"):
                 yield Label("🔍 RAG", classes="toggle-label")
                 yield Switch(value=False, id="toggle-rag-debug")
+            with Horizontal(classes="toggle-row"):
+                yield Label("🕐 Time", classes="toggle-label")
+                yield Switch(value=True, id="toggle-timestamps")
 
 
 class NeuralStream(ScrollableContainer):
@@ -839,6 +842,12 @@ class BottomDock(Vertical):
                 yield Label("[b]Actions[/b]", classes="panel-header")
                 with Horizontal(classes="button-row"):
                     yield Button("📑 Bookmark", id="dock-bookmark-btn")
+
+                # Display
+                yield Label("[b]Display[/b]", classes="panel-header")
+                with Horizontal(classes="toggle-row"):
+                    yield Label("🕐 Timestamps", classes="toggle-label")
+                    yield Switch(value=True, id="dock-toggle-timestamps")
 
     def update_context_display(self, context_text: str):
         """Update the context status in the dock."""
@@ -1935,6 +1944,7 @@ class SovwrenIDE(App):
     PREF_INITIATIVE_DEFAULT_KEY = "initiative_default"  # Preference key for initiative default (Low/Normal/High)
     PREF_LAST_MODE_KEY = "last_mode"  # Preference key for mode persistence (Workshop/Sanctuary)
     PREF_LAST_LENS_KEY = "last_lens"  # Preference key for lens persistence (Blue/Red/Purple)
+    PREF_SHOW_TIMESTAMPS_KEY = "show_timestamps"  # Preference key for timestamp visibility (default: True)
 
     # Known context windows for common models (in tokens)
     # Add models as you encounter them - this is a practical lookup, not exhaustive
@@ -1978,6 +1988,7 @@ class SovwrenIDE(App):
         self.session_lens = "Blue"
         self.idle_mode = False
         self.rag_debug_enabled = False  # RAG Debug Mode toggle
+        self.show_timestamps = True     # Message timestamps (default ON per Monday's spec)
         self.social_carryover = True    # Social Carryover: warm (True) or neutral (False)
 
         # Session management (initialized properly in _start_new_session/_resume_session)
@@ -2174,9 +2185,26 @@ class SovwrenIDE(App):
             except Exception:
                 pass
 
+            # Load timestamp preference (default ON)
+            try:
+                saved_ts = await self.db.get_preference(self.PREF_SHOW_TIMESTAMPS_KEY, default="true")
+                self.show_timestamps = saved_ts.lower() == "true"
+            except Exception:
+                pass
+
         # Apply restored mode to UI (class + buttons)
         self._apply_mode_to_ui(self.session_mode)
         self._apply_lens_to_ui(self.session_lens)
+
+        # Apply restored timestamp preference to toggles
+        try:
+            self.query_one("#toggle-timestamps", Switch).value = self.show_timestamps
+        except Exception:
+            pass
+        try:
+            self.query_one("#dock-toggle-timestamps", Switch).value = self.show_timestamps
+        except Exception:
+            pass
 
         # Initialize initiative UI (Truth Strip + buttons)
         self._apply_initiative_mode_defaults()
@@ -3693,8 +3721,8 @@ class SovwrenIDE(App):
         try:
             response = await self.council_client.consult(brief)
             if response:
-                ts = datetime.now().strftime("%H:%M")
-                stream.add_message(f"[dim]{ts}[/dim] [#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
+                ts_prefix = f"[dim]{datetime.now().strftime('%H:%M')}[/dim] " if self.show_timestamps else ""
+                stream.add_message(f"{ts_prefix}[#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
                 stream.add_message(f"[#e0d4c8]{response}[/#e0d4c8]", "council")
                 self.conversation_history.append(("council", f"[Council response to '{query}']: {response[:500]}..."))
             else:
@@ -3998,9 +4026,9 @@ class SovwrenIDE(App):
 
         stream = self.query_one(NeuralStream)
 
-        # Show user message with timestamp
-        ts = datetime.now().strftime("%H:%M")
-        stream.add_message(f"[dim]{ts}[/dim] [b]›[/b] {message}", "steward")
+        # Show user message (with timestamp if enabled)
+        ts_prefix = f"[dim]{datetime.now().strftime('%H:%M')}[/dim] " if self.show_timestamps else ""
+        stream.add_message(f"{ts_prefix}[b]›[/b] {message}", "steward")
 
         # Track in conversation history
         self.conversation_history.append(("steward", message))
@@ -4262,8 +4290,8 @@ class SovwrenIDE(App):
             if response:
                 # Strip reasoning traces for clean display
                 display_text, reasoning_text = self._strip_reasoning_traces(response)
-                ts = datetime.now().strftime("%H:%M")
-                stream.add_message(f"[dim]{ts}[/dim] [b]‹[/b] {display_text}", "node")
+                ts_prefix = f"[dim]{datetime.now().strftime('%H:%M')}[/dim] " if self.show_timestamps else ""
+                stream.add_message(f"{ts_prefix}[b]‹[/b] {display_text}", "node")
                 
                 # Show hint if reasoning was stripped
                 if reasoning_text:
@@ -4702,6 +4730,23 @@ Output ONLY valid JSON."""
                 stream.add_message("[cyan]🔍 RAG Debug: On[/cyan]", "system")
             else:
                 stream.add_message("[dim]🔍 RAG Debug: Off[/dim]", "system")
+
+        elif event.switch.id in ("toggle-timestamps", "dock-toggle-timestamps"):
+            self.show_timestamps = event.value
+            # Sync both switches
+            self._syncing_switches = True
+            try:
+                self.query_one("#toggle-timestamps", Switch).value = event.value
+            except Exception:
+                pass
+            try:
+                self.query_one("#dock-toggle-timestamps", Switch).value = event.value
+            except Exception:
+                pass
+            self._syncing_switches = False
+            # Persist preference
+            if self.db:
+                asyncio.create_task(self.db.set_preference(self.PREF_SHOW_TIMESTAMPS_KEY, str(event.value).lower()))
 
         elif event.switch.id in ("toggle-search-gate", "dock-toggle-search-gate"):
             # Friction Class VI: Search Gate consent toggle
