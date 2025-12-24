@@ -11,7 +11,7 @@ Usage:
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Input, Button, DirectoryTree, Label, Switch, TextArea, TabbedContent, TabPane, Collapsible
+from textual.widgets import Header, Footer, Static, Input, Button, DirectoryTree, Label, Switch, TextArea, TabbedContent, TabPane, Collapsible, OptionList
 from textual.screen import Screen
 from textual.reactive import reactive
 from textual.binding import Binding
@@ -999,14 +999,158 @@ class ChatInput(TextArea):
     # Prevent TextArea's default bindings from showing in Footer
     BINDINGS = []
 
+    MAX_MENTION_SUGGESTIONS = 12
+
     class Submitted(Message):
         """Fired when user submits the message."""
         def __init__(self, value: str) -> None:
             self.value = value
             super().__init__()
 
+    def _get_cursor_offset(self) -> int:
+        """Return cursor position as a character offset into self.text."""
+        text = self.text or ""
+        row, col = self.cursor_location
+        row = max(0, row)
+        col = max(0, col)
+
+        lines = text.split("\n")
+        if not lines:
+            return 0
+        if row >= len(lines):
+            return len(text)
+
+        offset = sum(len(lines[i]) + 1 for i in range(row)) + min(col, len(lines[row]))
+        return max(0, min(offset, len(text)))
+
+    def _offset_to_location(self, offset: int) -> tuple[int, int]:
+        """Convert a character offset into a (row, col) location."""
+        text = self.text or ""
+        offset = max(0, min(offset, len(text)))
+        before = text[:offset]
+        row = before.count("\n")
+        last_newline = before.rfind("\n")
+        col = offset if last_newline == -1 else offset - (last_newline + 1)
+        return row, col
+
+    def _current_mention_span(self) -> tuple[int, int, str] | None:
+        """Return (start_offset, end_offset, query) for an active @mention token."""
+        text = self.text or ""
+        cursor = self._get_cursor_offset()
+
+        start = text.rfind("@", 0, cursor + 1)
+        if start == -1:
+            return None
+
+        if start > 0 and not text[start - 1].isspace():
+            return None
+
+        if any(ch.isspace() for ch in text[start:cursor]):
+            return None
+
+        end = cursor
+        while end < len(text) and not text[end].isspace():
+            end += 1
+
+        query = text[start + 1:cursor]
+        return start, end, query
+
+    def _set_mention_visibility(self, visible: bool) -> None:
+        try:
+            suggestions = self.app.query_one("#mention-suggestions", OptionList)
+            suggestions.display = visible
+        except Exception:
+            pass
+
+    def _update_mention_suggestions(self) -> None:
+        """Update suggestion list based on current cursor token."""
+        span = self._current_mention_span()
+        if span is None:
+            self._set_mention_visibility(False)
+            return
+
+        _, _, query = span
+        query_norm = (query or "").strip().lower()
+
+        file_index = getattr(self.app, "_workspace_file_index", None) or []
+        if not file_index:
+            self._set_mention_visibility(False)
+            return
+
+        if query_norm:
+            matches = [p for p in file_index if query_norm in p.lower()]
+        else:
+            matches = list(file_index)
+
+        matches = matches[: self.MAX_MENTION_SUGGESTIONS]
+        if not matches:
+            self._set_mention_visibility(False)
+            return
+
+        try:
+            suggestions = self.app.query_one("#mention-suggestions", OptionList)
+            suggestions.clear_options()
+            suggestions.add_options(matches)
+            suggestions.highlighted = 0
+            suggestions.display = True
+        except Exception:
+            pass
+
+    def _accept_mention_suggestion(self) -> bool:
+        """Insert the currently highlighted mention suggestion into the input."""
+        span = self._current_mention_span()
+        if span is None:
+            return False
+
+        start, end, _ = span
+        try:
+            suggestions = self.app.query_one("#mention-suggestions", OptionList)
+            if not suggestions.display:
+                return False
+            option = suggestions.highlighted_option
+            if option is None:
+                return False
+            path = str(option.prompt)
+        except Exception:
+            return False
+
+        start_loc = self._offset_to_location(start)
+        end_loc = self._offset_to_location(end)
+        self.replace(f"@{path} ", start=start_loc, end=end_loc)
+        self._set_mention_visibility(False)
+        return True
+
+    def _move_mention_highlight(self, delta: int) -> bool:
+        """Move the highlighted suggestion up/down if suggestions are visible."""
+        try:
+            suggestions = self.app.query_one("#mention-suggestions", OptionList)
+            if not suggestions.display or suggestions.option_count == 0:
+                return False
+            idx = suggestions.highlighted if suggestions.highlighted is not None else 0
+            idx = max(0, min(idx + delta, suggestions.option_count - 1))
+            suggestions.highlighted = idx
+            suggestions.scroll_to_highlight()
+            return True
+        except Exception:
+            return False
+
     def _on_key(self, event: events.Key) -> None:
         """Handle Enter for submit."""
+        # If mention suggestions are visible, they own a few keys.
+        if event.key in ("down", "up"):
+            moved = self._move_mention_highlight(1 if event.key == "down" else -1)
+            if moved:
+                event.stop()
+                event.prevent_default()
+                return
+        if event.key in ("tab", "enter"):
+            if self._accept_mention_suggestion():
+                event.stop()
+                event.prevent_default()
+                return
+        if event.key == "escape":
+            self._set_mention_visibility(False)
+
         # Plain Enter = submit
         if event.key == "enter":
             text = self.text.strip()
@@ -1022,6 +1166,10 @@ class ChatInput(TextArea):
 
         # Let other keys pass through to TextArea
         super()._on_key(event)
+
+        # Update mentions after edits (typing/backspace etc).
+        if event.key in ("@", "backspace", "delete", "space") or (len(event.key) == 1):
+            self._update_mention_suggestions()
 
 
 # --- TABBED EDITOR ---
@@ -1519,6 +1667,16 @@ class SovwrenIDE(App):
         padding: 0;
         background: #000000;
     }
+    #mention-suggestions {
+        display: none;
+        height: auto;
+        max-height: 8;
+        background: #050505;
+        border: solid #1a1a1a;
+    }
+    #mention-suggestions Option {
+        padding: 0 1;
+    }
     #chat-input {
         width: 100%;
         height: 100%;
@@ -1804,6 +1962,7 @@ class SovwrenIDE(App):
                 # Chat content (shown in spine-chat mode)
                 with Vertical(id="chat-content"):
                     yield NeuralStream()
+                    yield OptionList(id="mention-suggestions")
                     with Container(id="input-container"):
                         yield ChatInput(id="chat-input", show_line_numbers=False)
                 # Inline spine editor (shown in spine-editor mode, Tall layout only)
@@ -1835,6 +1994,18 @@ class SovwrenIDE(App):
 
         # Temporal empathy: start idle check timer (checks every 5 seconds)
         self.set_interval(5.0, self._check_idle_state)
+
+        # Workspace file index (for @mentions in chat)
+        self._workspace_file_index: list[str] = []
+        try:
+            paths: list[str] = []
+            for p in workspace_root.rglob("*"):
+                if p.is_file():
+                    rel = p.relative_to(workspace_root).as_posix()
+                    paths.append(rel)
+            self._workspace_file_index = sorted(paths)
+        except Exception:
+            self._workspace_file_index = []
 
         # Initialize database early so we can read profile preference
         try:
@@ -3425,6 +3596,11 @@ class SovwrenIDE(App):
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         """Handle typing activity for temporal empathy."""
         self._reset_input_activity()  # User is typing - room wakes up
+        try:
+            if getattr(getattr(event, "text_area", None), "id", None) == "chat-input":
+                event.text_area._update_mention_suggestions()
+        except Exception:
+            pass
 
     async def action_submit_message(self) -> None:
         """Handle chat input from button or binding."""
