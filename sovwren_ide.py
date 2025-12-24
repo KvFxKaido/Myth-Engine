@@ -1042,6 +1042,24 @@ class ChatInput(TextArea):
 
     MAX_MENTION_SUGGESTIONS = 12
 
+    # Available slash commands with descriptions
+    SLASH_COMMANDS = [
+        ("/help", "Show all keybindings and commands"),
+        ("/clear", "Clear chat"),
+        ("/save", "Save current file"),
+        ("/bookmark", "Save bookmark [name]"),
+        ("/session", "Session info"),
+        ("/context", "Context info"),
+        ("/models", "Open model picker"),
+        ("/profiles", "Open profile picker"),
+        ("/monitor", "Open Monitor tab"),
+        ("/editor", "Open Editor tab"),
+        ("/council", "Consult cloud model <query>"),
+        ("/seat", "Switch Council model [model]"),
+        ("/confirm-yes", "Approve pending action"),
+        ("/confirm-no", "Cancel pending action"),
+    ]
+
     class Submitted(Message):
         """Fired when user submits the message."""
         def __init__(self, value: str) -> None:
@@ -1096,6 +1114,31 @@ class ChatInput(TextArea):
         query = text[start + 1:cursor]
         return start, end, query
 
+    def _current_slash_span(self) -> tuple[int, int, str] | None:
+        """Return (start_offset, end_offset, query) for an active /command token.
+
+        Only triggers at the start of input (no text before the /).
+        """
+        text = self.text or ""
+        cursor = self._get_cursor_offset()
+
+        # Only trigger if / is at the very start of the input
+        if not text.startswith("/"):
+            return None
+
+        # Check if cursor is still within the first "word" (the command)
+        # Commands end at whitespace
+        end = 0
+        while end < len(text) and not text[end].isspace():
+            end += 1
+
+        # Only show suggestions if cursor is within the command portion
+        if cursor > end:
+            return None
+
+        query = text[1:cursor]  # Everything after / up to cursor
+        return 0, end, query
+
     def _set_mention_visibility(self, visible: bool) -> None:
         try:
             suggestions = self.app.query_one("#mention-suggestions", OptionList)
@@ -1104,46 +1147,86 @@ class ChatInput(TextArea):
             pass
 
     def _update_mention_suggestions(self) -> None:
-        """Update suggestion list based on current cursor token."""
-        span = self._current_mention_span()
-        if span is None:
-            self._set_mention_visibility(False)
-            return
+        """Update suggestion list based on current cursor token.
 
-        _, _, query = span
-        query_norm = (query or "").strip().lower()
+        Checks for slash commands first (at start of input), then @mentions.
+        """
+        # Track what type of suggestion is active for accept logic
+        self._suggestion_type = None
 
-        file_index = getattr(self.app, "_workspace_file_index", None) or []
-        if not file_index:
-            self._set_mention_visibility(False)
-            return
+        # Check for slash command first (takes priority)
+        slash_span = self._current_slash_span()
+        if slash_span is not None:
+            _, _, query = slash_span
+            query_norm = (query or "").strip().lower()
 
-        if query_norm:
-            matches = [p for p in file_index if query_norm in p.lower()]
-        else:
-            matches = list(file_index)
+            # Filter commands by query
+            if query_norm:
+                matches = [
+                    f"{cmd}  [dim]{desc}[/dim]"
+                    for cmd, desc in self.SLASH_COMMANDS
+                    if query_norm in cmd.lower()
+                ]
+            else:
+                matches = [
+                    f"{cmd}  [dim]{desc}[/dim]"
+                    for cmd, desc in self.SLASH_COMMANDS
+                ]
 
-        matches = matches[: self.MAX_MENTION_SUGGESTIONS]
-        if not matches:
-            self._set_mention_visibility(False)
-            return
+            if matches:
+                try:
+                    suggestions = self.app.query_one("#mention-suggestions", OptionList)
+                    suggestions.clear_options()
+                    suggestions.add_options(matches)
+                    suggestions.highlighted = 0
+                    suggestions.display = True
+                    self._suggestion_type = "slash"
+                except Exception:
+                    pass
+                return
+            else:
+                self._set_mention_visibility(False)
+                return
 
-        try:
-            suggestions = self.app.query_one("#mention-suggestions", OptionList)
-            suggestions.clear_options()
-            suggestions.add_options(matches)
-            suggestions.highlighted = 0
-            suggestions.display = True
-        except Exception:
-            pass
+        # Check for @mention
+        mention_span = self._current_mention_span()
+        if mention_span is not None:
+            _, _, query = mention_span
+            query_norm = (query or "").strip().lower()
+
+            file_index = getattr(self.app, "_workspace_file_index", None) or []
+            if not file_index:
+                self._set_mention_visibility(False)
+                return
+
+            if query_norm:
+                matches = [p for p in file_index if query_norm in p.lower()]
+            else:
+                matches = list(file_index)
+
+            matches = matches[: self.MAX_MENTION_SUGGESTIONS]
+            if matches:
+                try:
+                    suggestions = self.app.query_one("#mention-suggestions", OptionList)
+                    suggestions.clear_options()
+                    suggestions.add_options(matches)
+                    suggestions.highlighted = 0
+                    suggestions.display = True
+                    self._suggestion_type = "mention"
+                except Exception:
+                    pass
+                return
+
+        # No active trigger
+        self._set_mention_visibility(False)
 
     def _accept_mention_suggestion(self) -> bool:
-        """Insert the currently highlighted mention suggestion into the input."""
-        span = self._current_mention_span()
-        if span is None:
-            return False
+        """Insert the currently highlighted suggestion into the input.
 
-        start, end, _ = span
+        Handles both slash commands and @mentions based on _suggestion_type.
+        """
+        suggestion_type = getattr(self, "_suggestion_type", None)
+
         try:
             suggestions = self.app.query_one("#mention-suggestions", OptionList)
             if not suggestions.display:
@@ -1151,15 +1234,40 @@ class ChatInput(TextArea):
             option = suggestions.highlighted_option
             if option is None:
                 return False
-            path = str(option.prompt)
+            selected = str(option.prompt)
         except Exception:
             return False
 
-        start_loc = self._offset_to_location(start)
-        end_loc = self._offset_to_location(end)
-        self.replace(f"@{path} ", start=start_loc, end=end_loc)
-        self._set_mention_visibility(False)
-        return True
+        if suggestion_type == "slash":
+            # Slash command: extract just the command (before the description)
+            span = self._current_slash_span()
+            if span is None:
+                return False
+            start, end, _ = span
+            # Parse command from "/<cmd>  [dim]desc[/dim]"
+            command = selected.split("  ")[0].strip()
+            # For commands that take arguments, add a space; otherwise just the command
+            needs_arg = command in ("/council", "/seat", "/bookmark")
+            replacement = f"{command} " if needs_arg else command
+            start_loc = self._offset_to_location(start)
+            end_loc = self._offset_to_location(end)
+            self.replace(replacement, start=start_loc, end=end_loc)
+            self._set_mention_visibility(False)
+            return True
+
+        elif suggestion_type == "mention":
+            # @mention: insert the file path
+            span = self._current_mention_span()
+            if span is None:
+                return False
+            start, end, _ = span
+            start_loc = self._offset_to_location(start)
+            end_loc = self._offset_to_location(end)
+            self.replace(f"@{selected} ", start=start_loc, end=end_loc)
+            self._set_mention_visibility(False)
+            return True
+
+        return False
 
     def _move_mention_highlight(self, delta: int) -> bool:
         """Move the highlighted suggestion up/down if suggestions are visible."""
@@ -2406,27 +2514,40 @@ class SovwrenIDE(App):
         # Run the async startup in a task
         asyncio.create_task(self._initialize_app())
 
-    # --- LAYOUT SYSTEM (Tall Layout Spec) ---
+    # --- LAYOUT SYSTEM (Slack-Based Detection) ---
+
+    # Layout constants (in terminal columns)
+    SPINE_WIDTH = 80           # Portrait spine width
+    LANDSCAPE_SPINE = 100      # Landscape spine width
+    LANDSCAPE_PADDING = 4      # Landscape adds 2 cols padding each side
+
+    # Hysteresis thresholds (slack = available width beyond portrait spine)
+    # Enter landscape when there's room for wider spine + padding
+    LANDSCAPE_ENTER_SLACK = 28  # Need 28 cols slack to enter (80 + 28 = 108)
+    LANDSCAPE_EXIT_SLACK = 16   # Stay until slack drops below 16 (80 + 16 = 96)
 
     def on_resize(self, event) -> None:
-        """Apply portrait/landscape class based on aspect ratio.
-        
-        Portrait-First: Both orientations have the same spine behavior.
-        Landscape just adds margins around the same centered spine.
+        """Apply portrait/landscape class based on available slack.
+
+        Slack-based detection (not aspect ratio):
+        - Portrait is the default, always safe
+        - Landscape activates only when there's enough room for air
+        - Hysteresis prevents flicker during resize
+
+        This aligns with: "Landscape adds air, not features."
         """
-        w, h = self.size.width, self.size.height
-        if w > h:
-            # Landscape: more air around the spine
+        available_slack = self.size.width - self.SPINE_WIDTH
+        current_layout = "landscape" if self.has_class("landscape") else "portrait"
+
+        if current_layout == "portrait" and available_slack >= self.LANDSCAPE_ENTER_SLACK:
+            # Enough room for landscape — switch
             self.remove_class("portrait")
             self.add_class("landscape")
-        else:
-            # Portrait: spine fills width
+        elif current_layout == "landscape" and available_slack <= self.LANDSCAPE_EXIT_SLACK:
+            # Not enough room anymore — fall back to portrait
             self.remove_class("landscape")
             self.add_class("portrait")
-
-
-    # set_layout() removed: Portrait-first paradigm doesn't use layout modes.
-    # Landscape/portrait is purely a CSS margin adjustment handled in on_resize().
+        # Otherwise: hold current state (hysteresis zone)
 
     def action_toggle_dock(self) -> None:
         """Ctrl+B: Toggle the bottom dock visibility."""
@@ -3135,9 +3256,16 @@ class SovwrenIDE(App):
         stream.add_message("[bold]Commands:[/bold]", "system")
         stream.add_message("[dim]  /help              Show this help[/dim]", "system")
         stream.add_message("[dim]  /clear             Clear chat[/dim]", "system")
-        stream.add_message("[dim]  /bookmark <name>   Save bookmark[/dim]", "system")
+        stream.add_message("[dim]  /save              Save current file[/dim]", "system")
+        stream.add_message("[dim]  /bookmark [name]   Save bookmark[/dim]", "system")
         stream.add_message("[dim]  /session           Session info[/dim]", "system")
         stream.add_message("[dim]  /context           Context info[/dim]", "system")
+        stream.add_message("[dim]  /models            Open model picker[/dim]", "system")
+        stream.add_message("[dim]  /profiles          Open profile picker[/dim]", "system")
+        stream.add_message("[dim]  /monitor           Open Monitor tab[/dim]", "system")
+        stream.add_message("[dim]  /editor            Open Editor tab[/dim]", "system")
+        stream.add_message("[dim]  /council <query>   Consult cloud model[/dim]", "system")
+        stream.add_message("[dim]  /seat [model]      Switch Council model[/dim]", "system")
         stream.add_message("[dim]  /confirm-yes       Approve pending action[/dim]", "system")
         stream.add_message("[dim]  /confirm-no        Cancel pending action[/dim]", "system")
 
@@ -4118,6 +4246,93 @@ class SovwrenIDE(App):
                         self.conversation_history.pop()
                     return
 
+                # Clear command
+                if msg_lower == "/clear":
+                    self.action_clear_chat()
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Save command
+                if msg_lower == "/save":
+                    self.action_save_file()
+                    stream.add_message("[dim]File saved.[/dim]", "system")
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Models command
+                if msg_lower == "/models":
+                    self.action_models()
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Profiles command
+                if msg_lower == "/profiles":
+                    self.action_profiles()
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Monitor command - focus dock Monitor tab
+                if msg_lower == "/monitor":
+                    self.add_class("dock-visible")
+                    try:
+                        dock_tabs = self.query_one("#dock-tabs", TabbedContent)
+                        dock_tabs.active = "dock-monitor"
+                        stream.add_message("[dim]Monitor opened.[/dim]", "system")
+                    except Exception:
+                        stream.add_message("[yellow]Dock not available.[/yellow]", "system")
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Editor command - focus dock Editor tab
+                if msg_lower == "/editor":
+                    self.add_class("dock-visible")
+                    try:
+                        dock_tabs = self.query_one("#dock-tabs", TabbedContent)
+                        dock_tabs.active = "dock-editor"
+                        stream.add_message("[dim]Editor opened.[/dim]", "system")
+                    except Exception:
+                        stream.add_message("[yellow]Dock not available.[/yellow]", "system")
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Session command - show session info
+                if msg_lower == "/session":
+                    session_name = self.session_name or "Unnamed"
+                    session_id = self.session_id or "None"
+                    exchanges = self._exchange_count if hasattr(self, '_exchange_count') else 0
+                    stream.add_message(f"[dim]Session: {session_name}[/dim]", "system")
+                    stream.add_message(f"[dim]ID: {session_id[:8]}... | Exchanges: {exchanges}[/dim]", "system")
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Context command - show context info
+                if msg_lower == "/context":
+                    history_turns = len(self.conversation_history)
+                    band = self._context_band if hasattr(self, '_context_band') else "unknown"
+                    rag_chunks = len(self.rag_chunks_loaded) if hasattr(self, 'rag_chunks_loaded') else 0
+                    stream.add_message(f"[dim]Context band: {band}[/dim]", "system")
+                    stream.add_message(f"[dim]History: {history_turns} turns | RAG chunks: {rag_chunks}[/dim]", "system")
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
+                # Bookmark command - with optional name
+                if msg_lower.startswith("/bookmark"):
+                    # Extract optional name from /bookmark <name>
+                    parts = message.split(maxsplit=1)
+                    bookmark_name = parts[1] if len(parts) > 1 else None
+                    await self.initiate_bookmark_weave(preset_name=bookmark_name)
+                    if self.conversation_history and self.conversation_history[-1] == ("steward", message):
+                        self.conversation_history.pop()
+                    return
+
                 # Check if this is a memory store command
                 if msg_lower.startswith(('remember:', 'store:', 'save:')):
                     content = message.split(':', 1)[1].strip() if ':' in message else message
@@ -4529,8 +4744,12 @@ class SovwrenIDE(App):
         except Exception as e:
             self.notify(f"Close failed: {e}", severity="error")
 
-    async def initiate_bookmark_weave(self) -> None:
-        """Prepare and open the bookmark weaving modal with Auto-Loom drafting."""
+    async def initiate_bookmark_weave(self, preset_name: str | None = None) -> None:
+        """Prepare and open the bookmark weaving modal with Auto-Loom drafting.
+
+        Args:
+            preset_name: Optional name to use as the bookmark title instead of auto-drafting.
+        """
         # Guard against rapid clicks
         if self._weaving_bookmark:
             return
@@ -4544,7 +4763,7 @@ class SovwrenIDE(App):
 
         # Default fallback values
         draft = {
-            "title": "Session",
+            "title": preset_name or "Session",
             "description": "",
             "reflections": "",
             "drift": ""
@@ -4555,6 +4774,9 @@ class SovwrenIDE(App):
             try:
                 auto_draft = await self._draft_bookmark_content(recent_history)
                 if auto_draft:
+                    # Preserve preset_name if provided
+                    if preset_name:
+                        auto_draft.pop("title", None)
                     draft.update(auto_draft)
             except Exception as e:
                 self.notify(f"Auto-draft failed: {e}", severity="warning")
