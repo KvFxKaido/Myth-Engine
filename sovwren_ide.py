@@ -3693,7 +3693,8 @@ class SovwrenIDE(App):
         try:
             response = await self.council_client.consult(brief)
             if response:
-                stream.add_message(f"[#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
+                ts = datetime.now().strftime("%H:%M")
+                stream.add_message(f"[dim]{ts}[/dim] [#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
                 stream.add_message(f"[#e0d4c8]{response}[/#e0d4c8]", "council")
                 self.conversation_history.append(("council", f"[Council response to '{query}']: {response[:500]}..."))
             else:
@@ -3997,8 +3998,9 @@ class SovwrenIDE(App):
 
         stream = self.query_one(NeuralStream)
 
-        # Show user message
-        stream.add_message(f"[b]›[/b] {message}", "steward")
+        # Show user message with timestamp
+        ts = datetime.now().strftime("%H:%M")
+        stream.add_message(f"[dim]{ts}[/dim] [b]›[/b] {message}", "steward")
 
         # Track in conversation history
         self.conversation_history.append(("steward", message))
@@ -4260,7 +4262,8 @@ class SovwrenIDE(App):
             if response:
                 # Strip reasoning traces for clean display
                 display_text, reasoning_text = self._strip_reasoning_traces(response)
-                stream.add_message(f"[b]‹[/b] {display_text}", "node")
+                ts = datetime.now().strftime("%H:%M")
+                stream.add_message(f"[dim]{ts}[/dim] [b]‹[/b] {display_text}", "node")
                 
                 # Show hint if reasoning was stripped
                 if reasoning_text:
