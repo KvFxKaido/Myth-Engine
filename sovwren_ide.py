@@ -25,6 +25,8 @@ import uuid
 import shutil
 from datetime import datetime
 from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog
 
 # Add project root to path for imports
 project_root = Path(__file__).parent          # .../Sovwren
@@ -110,78 +112,78 @@ class FileImportModal(Screen):
             self.dismiss({"action": "cancel"})
 
 
-class AttachFileModal(Screen):
-    """Modal for selecting workspace files to attach as @refs."""
+class ImportDestinationModal(Screen):
+    """Modal for choosing where to save imported files in workspace."""
 
     CSS = """
-    AttachFileModal {
+    ImportDestinationModal {
         align: center middle;
         background: rgba(0, 0, 0, 0.5);
     }
-    #attach-dialog {
-        width: 70%;
-        height: 70%;
+    #import-dest-dialog {
+        width: 60%;
+        height: 60%;
         background: #000000;
         border: solid #1a1a1a;
         padding: 1;
     }
-    #attach-file-list {
+    #import-dest-list {
         height: 1fr;
         margin: 1 0;
         border: solid #1a1a1a;
         background: #050505;
     }
-    #attach-filter {
+    #import-new-folder {
         width: 100%;
         margin-bottom: 1;
     }
-    #attach-buttons {
+    #import-dest-buttons {
         height: auto;
         align: right middle;
     }
-    #attach-buttons Button {
+    #import-dest-buttons Button {
         margin-left: 1;
     }
     """
 
-    def __init__(self, files: list[str]):
+    def __init__(self, files: list[Path], folders: list[str]):
         super().__init__()
-        self.all_files = files
-        self.filtered_files = files[:100]  # Limit initial display
+        self.files = files
+        self.folders = folders
 
     def compose(self) -> ComposeResult:
-        with Container(id="attach-dialog"):
-            yield Label("[b]Attach File[/b]", classes="panel-header")
-            yield Static(f"[dim]{len(self.all_files)} files in workspace[/dim]")
-            yield Input(placeholder="Filter files...", id="attach-filter")
-            yield OptionList(*self.filtered_files[:50], id="attach-file-list")
-            with Horizontal(id="attach-buttons"):
-                yield Button("Cancel", id="btn-attach-cancel")
-                yield Button("Attach", id="btn-attach-confirm", variant="success")
+        file_names = [f.name for f in self.files]
+        file_list = ", ".join(file_names[:3])
+        if len(file_names) > 3:
+            file_list += f" +{len(file_names) - 3} more"
 
-    def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id == "attach-filter":
-            query = event.value.lower().strip()
-            if query:
-                self.filtered_files = [f for f in self.all_files if query in f.lower()][:50]
-            else:
-                self.filtered_files = self.all_files[:50]
+        with Container(id="import-dest-dialog"):
+            yield Label("[b]Import Files[/b]", classes="panel-header")
+            yield Static(f"[dim]Files: {file_list}[/dim]")
+            yield Static("[dim]Select destination folder:[/dim]")
+            yield OptionList(*self.folders, id="import-dest-list")
+            yield Input(placeholder="Or create new folder...", id="import-new-folder")
+            with Horizontal(id="import-dest-buttons"):
+                yield Button("Cancel", id="btn-import-dest-cancel")
+                yield Button("Import", id="btn-import-dest-confirm", variant="success")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-import-dest-confirm":
+            # Check for new folder first
             try:
-                file_list = self.query_one("#attach-file-list", OptionList)
-                file_list.clear_options()
-                file_list.add_options(self.filtered_files)
-                if self.filtered_files:
-                    file_list.highlighted = 0
+                new_folder_input = self.query_one("#import-new-folder", Input)
+                if new_folder_input.value.strip():
+                    self.dismiss({"folder": new_folder_input.value.strip(), "files": self.files})
+                    return
             except Exception:
                 pass
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-attach-confirm":
+            # Otherwise use selected folder
             try:
-                file_list = self.query_one("#attach-file-list", OptionList)
-                if file_list.highlighted is not None:
-                    option = file_list.get_option_at_index(file_list.highlighted)
-                    self.dismiss({"file": str(option.prompt)})
+                folder_list = self.query_one("#import-dest-list", OptionList)
+                if folder_list.highlighted is not None:
+                    option = folder_list.get_option_at_index(folder_list.highlighted)
+                    self.dismiss({"folder": str(option.prompt), "files": self.files})
                     return
             except Exception:
                 pass
@@ -190,8 +192,8 @@ class AttachFileModal(Screen):
             self.dismiss(None)
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        """Double-click or Enter on option selects it."""
-        self.dismiss({"file": str(event.option.prompt)})
+        """Double-click or Enter on folder selects it."""
+        self.dismiss({"folder": str(event.option.prompt), "files": self.files})
 
 
 class CommitModal(Screen):
@@ -1978,7 +1980,7 @@ class SovwrenIDE(App):
         background: #000000;
         layout: horizontal;
     }
-    #btn-attach {
+    #btn-attach, #btn-dock-toggle {
         width: 3;
         height: 1;
         min-width: 3;
@@ -1988,21 +1990,14 @@ class SovwrenIDE(App):
         text-align: center;
         margin-top: 1;
     }
-    #btn-attach:hover {
+    #btn-attach:hover, #btn-dock-toggle:hover {
         color: #808080;
     }
-    #btn-dock-toggle {
-        width: 3;
-        height: 1;
-        min-width: 3;
+    #btn-attach:focus, #btn-dock-toggle:focus,
+    #btn-attach.-active, #btn-dock-toggle.-active {
         background: #000000;
         border: none;
-        color: #505050;
-        text-align: center;
-        margin-top: 1;
-    }
-    #btn-dock-toggle:hover {
-        color: #808080;
+        text-style: none;
     }
     #mention-suggestions {
         display: none;
@@ -2669,10 +2664,8 @@ class SovwrenIDE(App):
         """Ctrl+B: Toggle the bottom dock visibility."""
         if self.has_class("dock-visible"):
             self.remove_class("dock-visible")
-            self.notify("📦 Dock hidden (Ctrl+B to show)", severity="information")
         else:
             self.add_class("dock-visible")
-            self.notify("📦 Dock visible (Ctrl+B to hide)", severity="information")
 
     def _effective_initiative(self) -> str:
         """Get effective initiative, respecting temporary Idle forcing."""
@@ -3768,30 +3761,82 @@ class SovwrenIDE(App):
 
         return self.DEFAULT_CONTEXT_WINDOW
 
-    # ==================== ATTACH FILE MODAL ====================
+    # ==================== ATTACH FILE / IMPORT ====================
 
     def _open_attach_modal(self) -> None:
-        """Open the attach file modal for selecting workspace files."""
-        files = getattr(self, "_workspace_file_index", None) or []
-        if not files:
-            self.notify("No files in workspace to attach", severity="warning")
-            return
-        self.push_screen(AttachFileModal(files=files), self._on_attach_file_selected)
+        """Open system file picker to import files into workspace."""
+        # Create hidden tk root for file dialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
 
-    def _on_attach_file_selected(self, result: dict | None) -> None:
-        """Handle attach file modal result."""
-        if not result or "file" not in result:
-            return
+        # Open file picker
+        file_paths = filedialog.askopenfilenames(
+            title="Select files to import into workspace",
+            parent=root
+        )
+        root.destroy()
 
-        file_path = result["file"]
+        if not file_paths:
+            return  # User cancelled
+
+        files = [Path(f) for f in file_paths]
+
+        # Get list of subfolders in workspace for destination picker
+        folders = ["(root)"]  # Root workspace option
         try:
-            chat_input = self.query_one("#chat-input", ChatInput)
-            # Insert @ref at cursor position
-            chat_input.insert(f"@{file_path} ")
-            chat_input.focus()
-            self.notify(f"Attached: {file_path}", severity="information")
-        except Exception as e:
-            self.notify(f"Failed to attach: {e}", severity="error")
+            for item in workspace_root.iterdir():
+                if item.is_dir() and not item.name.startswith("."):
+                    folders.append(item.name)
+        except Exception:
+            pass
+
+        self.push_screen(ImportDestinationModal(files=files, folders=folders), self._on_import_destination_selected)
+
+    def _on_import_destination_selected(self, result: dict | None) -> None:
+        """Handle import destination selection - copy files and insert @refs."""
+        if not result or "files" not in result:
+            return
+
+        files: list[Path] = result["files"]
+        folder_name: str = result.get("folder", "(root)")
+
+        # Determine destination directory
+        if folder_name == "(root)":
+            dest_dir = workspace_root
+        else:
+            dest_dir = workspace_root / folder_name
+            dest_dir.mkdir(exist_ok=True)
+
+        # Copy files and collect refs
+        refs = []
+        for file_path in files:
+            try:
+                dest_path = dest_dir / file_path.name
+                # Handle name collision
+                if dest_path.exists():
+                    stem = file_path.stem
+                    suffix = file_path.suffix
+                    counter = 1
+                    while dest_path.exists():
+                        dest_path = dest_dir / f"{stem}_{counter}{suffix}"
+                        counter += 1
+
+                shutil.copy2(file_path, dest_path)
+                rel_path = dest_path.relative_to(workspace_root).as_posix()
+                refs.append(f"@{rel_path}")
+            except Exception as e:
+                self.notify(f"Failed to copy {file_path.name}: {e}", severity="error")
+
+        if refs:
+            try:
+                chat_input = self.query_one("#chat-input", ChatInput)
+                chat_input.insert(" ".join(refs) + " ")
+                chat_input.focus()
+                # Rebuild file index to include new files
+                self._build_workspace_file_index()
+            except Exception:
+                pass
 
     async def _handle_council_command(self, message: str) -> None:
         """Handle /council command for cloud model consultation.
