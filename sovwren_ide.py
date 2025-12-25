@@ -34,6 +34,14 @@ workspace_root = project_root / "workspace"   # .../Sovwren/workspace
 workspace_root.mkdir(exist_ok=True)           # Ensure it exists
 sys.path.insert(0, str(project_root))
 
+from glyphs import (
+    LOCK, UNLOCK, GLOBE, CLOUD, FILE, FOLDER, SEARCH, GEAR, BOOKMARK,
+    WRENCH, MOON, CLOCK, CALENDAR, COMMENT, CHART, SAVE, EXPAND,
+    LENS_BLUE, LENS_RED, LENS_PURPLE, WARNING, THREAD, HANDSHAKE,
+    SQUARE, BULB, CHAT, ROBOT, MIRROR, UPLOAD, DOWNLOAD, PENCIL,
+    MEMO, THOUGHT,
+)
+
 
 # --- UI COMPONENTS ---
 
@@ -766,31 +774,31 @@ class ProtocolDeck(Vertical):
         # Essential controls - always visible (Truth Strip answers)
         yield Label("[b]Mode[/b]", classes="panel-header")
         with Horizontal(classes="button-row"):
-            workshop_btn = Button("🛠 Workshop", id="mode-workshop", classes="mode-btn active")
+            workshop_btn = Button(f"{WRENCH} Workshop", id="mode-workshop", classes="mode-btn active")
             workshop_btn.tooltip = "Task-focused, direct output"
             yield workshop_btn
-            sanctuary_btn = Button("🕯 Sanctuary", id="mode-sanctuary", classes="mode-btn")
+            sanctuary_btn = Button(f"{MOON} Sanctuary", id="mode-sanctuary", classes="mode-btn")
             sanctuary_btn.tooltip = "Reflective, pressure-free"
             yield sanctuary_btn
 
         yield Label("[b]Gates[/b]", classes="panel-header panel-header-spaced")
         with Horizontal(classes="toggle-row"):
-            yield Label("🌐", classes="toggle-label")
+            yield Label(GLOBE, classes="toggle-label")
             yield Switch(value=False, id="toggle-search-gate")
-            yield Label("☁️", classes="toggle-label")
+            yield Label(CLOUD, classes="toggle-label")
             yield Switch(value=False, id="toggle-council-gate")
 
         # Secondary controls - collapsed by default
         with Collapsible(title="⋮ More", collapsed=True, id="settings-drawer"):
             yield Label("[b]Lens[/b]", classes="panel-header")
             with Horizontal(classes="button-row"):
-                blue_btn = Button("🔵", id="lens-blue", classes="lens-btn active")
+                blue_btn = Button(LENS_BLUE, id="lens-blue", classes="lens-btn active")
                 blue_btn.tooltip = "Blue - Analytical"
                 yield blue_btn
-                red_btn = Button("🔴", id="lens-red", classes="lens-btn")
+                red_btn = Button(LENS_RED, id="lens-red", classes="lens-btn")
                 red_btn.tooltip = "Red - Direct"
                 yield red_btn
-                purple_btn = Button("🟣", id="lens-purple", classes="lens-btn")
+                purple_btn = Button(LENS_PURPLE, id="lens-purple", classes="lens-btn")
                 purple_btn.tooltip = "Purple - Reflective"
                 yield purple_btn
 
@@ -805,45 +813,45 @@ class ProtocolDeck(Vertical):
 
             yield Label("[b]Actions[/b]", classes="panel-header")
             with Horizontal(classes="button-row"):
-                bookmark_btn = Button("📑", id="btn-bookmark", classes="action-btn action-btn-accent")
+                bookmark_btn = Button(BOOKMARK, id="btn-bookmark", classes="action-btn action-btn-accent")
                 bookmark_btn.tooltip = "Bookmark"
                 yield bookmark_btn
-                sessions_btn = Button("🧵", id="btn-sessions", classes="action-btn")
+                sessions_btn = Button(THREAD, id="btn-sessions", classes="action-btn")
                 sessions_btn.tooltip = "Sessions"
                 yield sessions_btn
-                models_btn = Button("🤖", id="btn-models", classes="action-btn")
+                models_btn = Button(ROBOT, id="btn-models", classes="action-btn")
                 models_btn.tooltip = "Models"
                 yield models_btn
-                profiles_btn = Button("🪞", id="btn-profiles", classes="action-btn")
+                profiles_btn = Button(MIRROR, id="btn-profiles", classes="action-btn")
                 profiles_btn.tooltip = "Profiles"
                 yield profiles_btn
 
             yield Label("[b]Presence[/b]", classes="panel-header panel-header-spaced")
             with Horizontal(classes="toggle-row"):
-                yield Label("🌙 Idle", classes="toggle-label")
+                yield Label(f"{MOON} Idle", classes="toggle-label")
                 yield Switch(value=False, id="toggle-idleness")
 
             yield Label("[b]Git[/b]", classes="panel-header panel-header-spaced")
             with Horizontal(classes="button-row"):
-                pull_btn = Button("📥", id="btn-git-pull", classes="git-btn")
+                pull_btn = Button(DOWNLOAD, id="btn-git-pull", classes="git-btn")
                 pull_btn.tooltip = "Git Pull"
                 yield pull_btn
-                commit_btn = Button("📝", id="btn-git-commit", classes="git-btn")
+                commit_btn = Button(PENCIL, id="btn-git-commit", classes="git-btn")
                 commit_btn.tooltip = "Git Commit"
                 yield commit_btn
-                push_btn = Button("📤", id="btn-git-push", classes="git-btn")
+                push_btn = Button(UPLOAD, id="btn-git-push", classes="git-btn")
                 push_btn.tooltip = "Git Push"
                 yield push_btn
 
             yield Label("[b]Debug[/b]", classes="panel-header panel-header-spaced")
             with Horizontal(classes="toggle-row"):
-                yield Label("🔍 RAG", classes="toggle-label")
+                yield Label(f"{SEARCH} RAG", classes="toggle-label")
                 yield Switch(value=False, id="toggle-rag-debug")
             with Horizontal(classes="toggle-row"):
-                yield Label("🕐 Time", classes="toggle-label")
+                yield Label(f"{CLOCK} Time", classes="toggle-label")
                 yield Switch(value=True, id="toggle-timestamps")
             with Horizontal(classes="toggle-row"):
-                yield Label("📄 Auto", classes="toggle-label")
+                yield Label(f"{FILE} Auto", classes="toggle-label")
                 yield Switch(value=False, id="toggle-auto-load-refs")
 
 
@@ -871,17 +879,17 @@ class BottomDock(Vertical):
 
     def compose(self) -> ComposeResult:
         with TabbedContent(id="dock-tabs"):
-            with TabPane("📁 Files", id="dock-files"):
+            with TabPane(f"{FOLDER} Files", id="dock-files"):
                 yield DirectoryTree(str(workspace_root), id="dock-file-tree")
             
-            with TabPane("✍ Editor", id="dock-editor"):
+            with TabPane("Editor", id="dock-editor"):
                 with Horizontal(id="dock-editor-toolbar"):
-                    yield Button("💾 Save", id="btn-dock-save", classes="editor-btn")
-                    yield Button("⬆ Expand", id="btn-dock-expand", classes="editor-btn")
+                    yield Button(f"{SAVE} Save", id="btn-dock-save", classes="editor-btn")
+                    yield Button(f"{EXPAND} Expand", id="btn-dock-expand", classes="editor-btn")
                     yield Static("[dim]No file loaded[/dim]", id="dock-editor-status")
                 yield TextArea("", id="dock-editor-textarea", show_line_numbers=True)
 
-            with TabPane("📊 Monitor", id="dock-monitor"):
+            with TabPane(f"{CHART} Monitor", id="dock-monitor"):
                 yield Label("[b]Model[/b]", classes="panel-header")
                 yield Static("", id="monitor-model")
                 yield Static("", id="monitor-request")
@@ -895,50 +903,56 @@ class BottomDock(Vertical):
                 yield Static("", id="monitor-consent")
                 yield Static("", id="monitor-refs")
 
-            with TabPane("📋 Context", id="dock-context"):
+            with TabPane("Context", id="dock-context"):
                 yield Static("[dim]No context loaded[/dim]", id="dock-context-status")
                 yield Static("", id="dock-memory-status")
              
-            with TabPane("⚙️ Controls", id="dock-controls"):
+            with TabPane(f"{GEAR} Controls", id="dock-controls"):
                 # Mode buttons (essential)
                 yield Label("[b]Mode[/b]", classes="panel-header")
                 with Horizontal(classes="button-row"):
-                    yield Button("🛠 Workshop", id="dock-mode-workshop", classes="mode-btn active")
-                    yield Button("🕯 Sanctuary", id="dock-mode-sanctuary", classes="mode-btn")
+                    yield Button(f"{WRENCH} Workshop", id="dock-mode-workshop", classes="mode-btn active")
+                    yield Button(f"{MOON} Sanctuary", id="dock-mode-sanctuary", classes="mode-btn")
                 
                 # Gates (essential)
                 yield Label("[b]Gates[/b]", classes="panel-header")
                 with Horizontal(classes="toggle-row"):
-                    yield Label("🌐", classes="toggle-label")
+                    yield Label(GLOBE, classes="toggle-label")
                     yield Switch(value=False, id="dock-toggle-search-gate")
-                    yield Label("☁️", classes="toggle-label")
+                    yield Label(CLOUD, classes="toggle-label")
                     yield Switch(value=False, id="dock-toggle-council-gate")
                 
                 # Lens
                 yield Label("[b]Lens[/b]", classes="panel-header")
                 with Horizontal(classes="button-row"):
-                    yield Button("🔵", id="dock-lens-blue", classes="lens-btn active")
-                    yield Button("🔴", id="dock-lens-red", classes="lens-btn")
-                    yield Button("🟣", id="dock-lens-purple", classes="lens-btn")
+                    yield Button(LENS_BLUE, id="dock-lens-blue", classes="lens-btn active")
+                    yield Button(LENS_RED, id="dock-lens-red", classes="lens-btn")
+                    yield Button(LENS_PURPLE, id="dock-lens-purple", classes="lens-btn")
 
                 # Initiative
                 yield Label("[b]Initiative[/b]", classes="panel-header")
                 with Horizontal(classes="button-row"):
                     yield Button("Init: N", id="dock-btn-initiative-cycle", classes="action-btn")
                     yield Button("★ Default", id="dock-btn-initiative-default", classes="action-btn")
-                
+
+                # Presence
+                yield Label("[b]Presence[/b]", classes="panel-header")
+                with Horizontal(classes="toggle-row"):
+                    yield Label(f"{MOON} Idle", classes="toggle-label")
+                    yield Switch(value=False, id="dock-toggle-idleness")
+
                 # Actions
                 yield Label("[b]Actions[/b]", classes="panel-header")
                 with Horizontal(classes="button-row"):
-                    yield Button("📑 Bookmark", id="dock-bookmark-btn")
+                    yield Button(f"{BOOKMARK} Bookmark", id="dock-bookmark-btn")
 
                 # Display
                 yield Label("[b]Display[/b]", classes="panel-header")
                 with Horizontal(classes="toggle-row"):
-                    yield Label("🕐 Timestamps", classes="toggle-label")
+                    yield Label(f"{CLOCK} Timestamps", classes="toggle-label")
                     yield Switch(value=True, id="dock-toggle-timestamps")
                 with Horizontal(classes="toggle-row"):
-                    yield Label("📄 Auto-load @refs", classes="toggle-label")
+                    yield Label(f"{FILE} Auto-load @refs", classes="toggle-label")
                     yield Switch(value=False, id="dock-toggle-auto-load-refs")
 
     def update_context_display(self, context_text: str):
@@ -979,9 +993,9 @@ class StatusBar(Static):
 
     # Lens glyphs for compact display
     LENS_GLYPHS = {
-        "Blue": "🔵",
-        "Red": "🔴",
-        "Purple": "🟣",
+        "Blue": LENS_BLUE,
+        "Red": LENS_RED,
+        "Purple": LENS_PURPLE,
     }
 
     INITIATIVE_GLYPHS = {
@@ -1002,7 +1016,7 @@ class StatusBar(Static):
 
     def _get_lens_glyph(self) -> str:
         """Get lens glyph for compact display."""
-        return self.LENS_GLYPHS.get(self.lens, "🔵")
+        return self.LENS_GLYPHS.get(self.lens, LENS_BLUE)
 
     def _get_initiative_glyph(self) -> str:
         """Get initiative glyph for compact display."""
@@ -1011,26 +1025,26 @@ class StatusBar(Static):
     def _get_search_indicator(self) -> str:
         """Get search gate indicator."""
         if self.search_gate == "Local":
-            return "🔒"  # Closed gate
-        return "🌐"  # Open gate (web enabled)
+            return LOCK  # Closed gate
+        return GLOBE  # Open gate (web enabled)
 
     def _get_council_indicator(self) -> str:
         """Get council gate indicator."""
         if self.council_gate == "Off":
             return ""  # Hidden when off
-        return "☁️"  # Cloud when enabled
+        return CLOUD  # Cloud when enabled
 
     def _get_mode_indicator(self) -> str:
         """Get mode indicator."""
         if self.mode == "Workshop":
-            return "🛠"
-        return "🕯"
+            return WRENCH
+        return MOON
 
     def _get_social_indicator(self) -> str:
         """Get social carryover indicator."""
         if self.social_carryover:
-            return "🤝"  # Warm - relationship maintained
-        return "🔲"  # Neutral - task context only
+            return HANDSHAKE  # Warm - relationship maintained
+        return SQUARE  # Neutral - task context only
 
     def _build_status_text(self) -> str:
         """Build Truth Strip: Mode | Lens | Node | Connected."""
@@ -1039,7 +1053,7 @@ class StatusBar(Static):
         return f"{self.mode} | Init:{init} | {self.profile_name}: {self.model_name} | {status}"
 
     def compose(self) -> ComposeResult:
-        # Truth Strip layout: [Mode] [Lens] [Social] [Context●] [🔒/🌐] [☁️] [Node info]
+        # Truth Strip layout: [Mode] [Lens] [Social] [Context●] [/] [] [Node info]
         with Horizontal(id="status-bar-content"):
             yield Label(self._get_mode_indicator(), id="mode-glyph")
             yield Label(self._get_lens_glyph(), id="lens-glyph")
@@ -1573,7 +1587,7 @@ class TabbedEditor(Vertical):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="editor-toolbar"):
-            save_btn = Button("💾", id="btn-save", classes="editor-btn")
+            save_btn = Button(SAVE, id="btn-save", classes="editor-btn")
             save_btn.tooltip = "Save (Ctrl+S)"
             yield save_btn
             close_btn = Button("✕", id="btn-close-tab", classes="editor-btn")
@@ -2113,9 +2127,9 @@ class SovwrenIDE(App):
 
     /* Scrollbar: AMOLED purple */
     $scrollbar-background: #8a6ab0;
-    $scrollbar-background-hover: #9a7ac0;
-    $scrollbar-background-active: #9a7ac0;
-    """
+      $scrollbar-background-hover: #9a7ac0;
+      $scrollbar-background-active: #9a7ac0;
+      """
 
     # Essential bindings shown in footer (trim to avoid "icon salad")
     # All bindings still work — /help lists them all
@@ -2136,7 +2150,10 @@ class SovwrenIDE(App):
         Binding("f7", "profiles", "Profiles", show=False),
         Binding("ctrl+o", "open_external", "Open in Editor", show=False),
         Binding("ctrl+j", "insert_newline", "Newline", show=False),
-        Binding("ctrl+k", "toggle_social_carryover", "Social Carryover", show=False),
+        # Some widgets (TextArea) claim Ctrl+K; make this binding win globally.
+        Binding("ctrl+k", "toggle_social_carryover", "Social Carryover", show=False, priority=True),
+        # Fallback for terminals/editors that swallow Ctrl+K (e.g. chorded keymaps).
+        Binding("f12", "toggle_social_carryover", "Social Carryover", show=False),
         Binding("ctrl+i", "cycle_initiative", "Cycle Initiative", show=False),
         Binding("ctrl+shift+i", "set_initiative_default", "Set Initiative Default", show=False),
         # Spine switching (works in both portrait and landscape)
@@ -2352,7 +2369,7 @@ class SovwrenIDE(App):
                 # Inline spine editor (shown in spine-editor mode, Tall layout only)
                 with Vertical(id="spine-editor"):
                     with Horizontal(id="spine-editor-toolbar"):
-                        yield Button("💾", id="btn-spine-save", classes="editor-btn")
+                        yield Button(SAVE, id="btn-spine-save", classes="editor-btn")
                         yield Button("✕ Close", id="btn-spine-close", classes="editor-btn")
                         yield Static("", id="spine-editor-status")
                     yield TextArea("", id="spine-editor-textarea", show_line_numbers=True)
@@ -2908,14 +2925,14 @@ class SovwrenIDE(App):
             try:
                 textarea = self.query_one("#spine-editor-textarea", TextArea)
                 if textarea.text != self._spine_editor_original:
-                    self.notify("⚠️ Unsaved changes! Save with 💾 or close to discard", severity="warning")
+                    self.notify(f"{WARNING} Unsaved changes! Save with {SAVE} or close to discard", severity="warning")
                     return
             except Exception:
                 pass
 
         self.switch_spine("chat")
         self._spine_editor_file = None
-        self.notify("🗨️ Chat", severity="information")
+        self.notify(f"{CHAT} Chat", severity="information")
 
     def action_spine_editor(self) -> None:
         """Alt+2 (or F10): Switch to Editor spine."""
@@ -2923,7 +2940,7 @@ class SovwrenIDE(App):
         if self._spine_editor_file:
             # Already have a file open, just switch to editor
             self.switch_spine("editor")
-            self.notify(f"📝 {Path(self._spine_editor_file).name}", severity="information")
+            self.notify(f"{MEMO} {Path(self._spine_editor_file).name}", severity="information")
         else:
             # If a file is highlighted in the tree, open it in the spine editor
             if self.selected_file and Path(self.selected_file).is_file():
@@ -2977,7 +2994,7 @@ class SovwrenIDE(App):
 
         # Switch to editor spine
         self.switch_spine("editor")
-        self.notify(f"📝 {Path(file_path).name}", severity="information")
+        self.notify(f"{MEMO} {Path(file_path).name}", severity="information")
 
     def action_spine_log(self) -> None:
         """Alt+3 (or F11): Switch to Log/Debug spine (Tall layout)."""
@@ -3022,20 +3039,20 @@ class SovwrenIDE(App):
         # Notify chat stream + show suggestions
         try:
             stream = self.query_one(NeuralStream)
-            stream.add_message(f"[cyan]📄 Opened: {rel_path}[/cyan]", "system")
+            stream.add_message(f"[cyan]{FILE} Opened: {rel_path}[/cyan]", "system")
 
             suggestion = get_file_suggestion(file_path)
             if suggestion:
                 hint = suggestion.get("hint", "")
                 if hint:
-                    stream.add_message(f"[dim]💡 {hint}[/dim]", "system")
+                    stream.add_message(f"[dim]{BULB} {hint}[/dim]", "system")
         except Exception:
             pass
 
         # Update context display (if present)
         try:
             context_widget = self.query_one("#context-status", Static)
-            context_widget.update(f"[green]📄 {rel_path}[/green]")
+            context_widget.update(f"[green]{FILE} {rel_path}[/green]")
         except Exception:
             pass
 
@@ -3070,7 +3087,7 @@ class SovwrenIDE(App):
             try:
                 textarea = self.query_one("#spine-editor-textarea", TextArea)
                 if textarea.text != self._spine_editor_original:
-                    self.notify("⚠️ Unsaved changes will be lost", severity="warning")
+                    self.notify(f"{WARNING} Unsaved changes will be lost", severity="warning")
             except Exception:
                 pass
 
@@ -3078,7 +3095,7 @@ class SovwrenIDE(App):
         self._spine_editor_file = None
         self._spine_editor_original = ""
         self.switch_spine("chat")
-        self.notify("🗨️ Chat", severity="information")
+        self.notify(f"{CHAT} Chat", severity="information")
 
     async def open_file_in_dock_editor(self, file_path: str) -> None:
         """Load a file into the dock editor TextArea."""
@@ -3159,10 +3176,10 @@ class SovwrenIDE(App):
         self.add_class("dock-visible")
         if self.has_class("dock-expanded"):
             self.remove_class("dock-expanded")
-            label = "⬆ Expand"
+            label = f"{EXPAND} Expand"
         else:
             self.add_class("dock-expanded")
-            label = "⬇ Collapse"
+            label = "Collapse"
 
         try:
             btn = self.query_one("#btn-dock-expand", Button)
@@ -3332,10 +3349,10 @@ class SovwrenIDE(App):
         # Stats line
         stats_parts = []
         if time_str:
-            stats_parts.append(f"📅 {time_str}")
+            stats_parts.append(f"{CALENDAR} {time_str}")
         if message_count:
             exchange_word = "exchange" if message_count == 1 else "exchanges"
-            stats_parts.append(f"💬 {message_count} {exchange_word}")
+            stats_parts.append(f"{COMMENT} {message_count} {exchange_word}")
         if stats_parts:
             lines.append(f"[dim]│[/dim] [dim]{' · '.join(stats_parts)}[/dim]")
 
@@ -3445,6 +3462,7 @@ class SovwrenIDE(App):
         stream.add_message("[dim]  Ctrl+O   Open in external editor[/dim]", "system")
         stream.add_message("[dim]  Ctrl+J   Insert newline[/dim]", "system")
         stream.add_message("[dim]  Ctrl+K   Toggle social carryover (warm/neutral)[/dim]", "system")
+        stream.add_message("[dim]  F12      Toggle social carryover (fallback)[/dim]", "system")
         stream.add_message("[dim]  F1       This help[/dim]", "system")
         stream.add_message("[dim]  F2       Models[/dim]", "system")
         stream.add_message("[dim]  F3       Consent checkpoint[/dim]", "system")
@@ -3961,7 +3979,7 @@ class SovwrenIDE(App):
 
         # Check if Council Gate is open (consent)
         if not self.council_gate_enabled:
-            stream.add_message("[yellow]Council Gate is closed. Enable it with F6 or the ☁️ toggle.[/yellow]", "system")
+            stream.add_message(f"[yellow]Council Gate is closed. Enable it with F6 or the {CLOUD} toggle.[/yellow]", "system")
             return
 
         try:
@@ -4014,7 +4032,7 @@ class SovwrenIDE(App):
                 truncated = " (truncated)" if meta.get("active_file_truncated") else ""
                 file_note = f"{ext or 'file'}{truncated}"
 
-            stream.add_message("[#d4a574]☁️ Council Preview (redacted):[/#d4a574]", "system")
+            stream.add_message(f"[#d4a574]{CLOUD} Council Preview (redacted):[/#d4a574]", "system")
             stream.add_message(
                 f"[dim]Turns: {turns} | Active file: {file_note} | Redactions: {redactions} | Expires: 60s[/dim]",
                 "system",
@@ -4229,7 +4247,7 @@ class SovwrenIDE(App):
 
         if not approved:
             self._pending_council = None
-            stream.add_message("[dim]☁️ Council request cancelled.[/dim]", "system")
+            stream.add_message(f"[dim]{CLOUD} Council request cancelled.[/dim]", "system")
             return
 
         if self.council_client is None:
@@ -4243,7 +4261,7 @@ class SovwrenIDE(App):
             return
 
         # Show consultation indicator
-        stream.add_message("[dim]☁️ Consulting Council...[/dim]", "system")
+        stream.add_message(f"[dim]{CLOUD} Consulting Council...[/dim]", "system")
 
         query = pending.get("query", "")
         brief = pending.get("brief", "")
@@ -4253,7 +4271,7 @@ class SovwrenIDE(App):
             response = await self.council_client.consult(brief)
             if response:
                 ts_prefix = f"[dim]{datetime.now().strftime('%H:%M')}[/dim] " if self.show_timestamps else ""
-                stream.add_message(f"{ts_prefix}[#d4a574]☁️ Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
+                stream.add_message(f"{ts_prefix}[#d4a574]{CLOUD} Council ({self.council_model or 'cloud'}):[/#d4a574]", "system")
                 stream.add_message(f"[#e0d4c8]{response}[/#e0d4c8]", "council")
                 self.conversation_history.append(("council", f"[Council response to '{query}']: {response[:500]}..."))
             else:
@@ -4388,7 +4406,7 @@ class SovwrenIDE(App):
                 stream.add_message(f"[yellow]Failed to read @{rel_path}: {e}[/yellow]", "system")
 
         if loaded_files:
-            stream.add_message(f"[dim]📄 Loaded: {', '.join(loaded_files)}[/dim]", "system")
+            stream.add_message(f"[dim]{FILE} Loaded: {', '.join(loaded_files)}[/dim]", "system")
 
         if context_parts:
             self._ref_context_injection = "\n\n".join(context_parts)
@@ -4643,7 +4661,7 @@ class SovwrenIDE(App):
                 else:
                     # Consent required: prompt and defer
                     ref_list = ", ".join(refs)
-                    stream.add_message(f"[dim]📄 {ref_list} referenced.[/dim]", "system")
+                    stream.add_message(f"[dim]{FILE} {ref_list} referenced.[/dim]", "system")
                     stream.add_message("[yellow]Load into context? [/load-yes] [/load-no][/yellow]", "system")
                     self._pending_ref_load = {"refs": refs, "message": message}
                     return
@@ -4916,7 +4934,7 @@ class SovwrenIDE(App):
             # Search Gate (Friction Class VI) - web search when gate is open
             if self.search_gate_enabled and self.search_manager and not is_greeting:
                 try:
-                    stream.add_message("[dim]🌐 Searching web...[/dim]", "system")
+                    stream.add_message(f"[dim]{GLOBE} Searching web...[/dim]", "system")
                     search_results, search_error = await self.search_manager.search(message, max_results=3)
 
                     if search_error:
@@ -4966,7 +4984,7 @@ class SovwrenIDE(App):
                         stream.add_message("[dim]───── RAG Debug ─────[/dim]", "hint")
                         chunks = rag_debug_info.get('chunks_found', 0)
                         total_ms = rag_debug_info.get('total_time_ms', 0)
-                        stream.add_message(f"[dim]📊 {chunks} chunks | {total_ms}ms[/dim]", "hint")
+                        stream.add_message(f"[dim]{CHART} {chunks} chunks | {total_ms}ms[/dim]", "hint")
                         sources = rag_debug_info.get('sources', [])
                         scores = rag_debug_info.get('scores', [])
                         for i, (src, score) in enumerate(zip(sources, scores)):
@@ -4977,7 +4995,7 @@ class SovwrenIDE(App):
                         has_conv = "conv" if rag_debug_info.get('has_conversation') else ""
                         has_docs = "docs" if rag_debug_info.get('has_documents') else ""
                         parts = [p for p in [has_conv, has_docs] if p]
-                        stream.add_message(f"[dim]💾 {ctx_chars} chars | {' + '.join(parts) if parts else 'empty'}[/dim]", "hint")
+                        stream.add_message(f"[dim]{SAVE} {ctx_chars} chars | {' + '.join(parts) if parts else 'empty'}[/dim]", "hint")
 
                 except Exception as e:
                     stream.add_message(f"[dim]RAG retrieval skipped: {e}[/dim]", "system")
@@ -4990,15 +5008,15 @@ class SovwrenIDE(App):
             # Always show conversation history (it's always in context)
             if self.conversation_history:
                 turns = len(self.conversation_history)
-                display_lines.append(f"[dim]💬 History ({turns} turns) — RAM[/dim]")
+                display_lines.append(f"[dim]{COMMENT} History ({turns} turns) — RAM[/dim]")
 
             # Show file-based sources (these cost tokens)
             for source in sources_used:
                 if source == "Memory Store":
-                    display_lines.append(f"[cyan]📁 Memory/memory.json[/cyan]")
+                    display_lines.append(f"[cyan]{FOLDER} Memory/memory.json[/cyan]")
                 else:
                     # RAG document
-                    display_lines.append(f"[green]📄 {source}[/green]")
+                    display_lines.append(f"[green]{FILE} {source}[/green]")
 
             if display_lines:
                 self._update_last_context_displays("\n".join(display_lines))
@@ -5024,7 +5042,7 @@ class SovwrenIDE(App):
                 
                 # Show hint if reasoning was stripped
                 if reasoning_text:
-                    stream.add_message("[dim italic]💭 Reasoning trace hidden[/dim italic]", "system")
+                    stream.add_message(f"[dim italic]{THOUGHT} Reasoning trace hidden[/dim italic]", "system")
                 
                 # Track full response in conversation history (preserves reasoning for context)
                 self.conversation_history.append(("node", response))
@@ -5134,13 +5152,13 @@ class SovwrenIDE(App):
 
             if lens_id == "lens-blue":
                 self.session_lens = "Blue"
-                stream.add_message("[dim]🔵 Grounded[/dim]", "system")
+                stream.add_message(f"[dim]{LENS_BLUE} Grounded[/dim]", "system")
             elif lens_id == "lens-red":
                 self.session_lens = "Red"
-                stream.add_message("[dim]🔴 Processing[/dim]", "system")
+                stream.add_message(f"[dim]{LENS_RED} Processing[/dim]", "system")
             elif lens_id == "lens-purple":
                 self.session_lens = "Purple"
-                stream.add_message("[dim]🟣 Symbolic[/dim]", "system")
+                stream.add_message(f"[dim]{LENS_PURPLE} Symbolic[/dim]", "system")
                 # Ephemeral scaffolding: show one-time hint for first Purple activation
                 from config import get_hint_message
                 hint = get_hint_message("purple_first")
@@ -5176,12 +5194,12 @@ class SovwrenIDE(App):
                 self.remove_class("mode-sanctuary")
                 self.add_class("mode-workshop")
                 self.session_mode = "Workshop"
-                stream.add_message("[dim]🛠 Workshop[/dim]", "system")
+                stream.add_message(f"[dim]{WRENCH} Workshop[/dim]", "system")
             elif mode_id == "mode-sanctuary":
                 self.remove_class("mode-workshop")
                 self.add_class("mode-sanctuary")
                 self.session_mode = "Sanctuary"
-                stream.add_message("[dim]🕯 Sanctuary[/dim]", "system")
+                stream.add_message(f"[dim]{MOON} Sanctuary[/dim]", "system")
                 # Ephemeral scaffolding: show one-time hint for first Sanctuary activation
                 from config import get_hint_message
                 hint = get_hint_message("sanctuary_first")
@@ -5246,7 +5264,7 @@ class SovwrenIDE(App):
                 subprocess.run(["xdg-open", self.selected_file], check=True)
 
             rel_path = Path(self.selected_file).name
-            stream.add_message(f"[dim]📤 Opened in external editor: {rel_path}[/dim]", "system")
+            stream.add_message(f"[dim]{UPLOAD} Opened in external editor: {rel_path}[/dim]", "system")
 
         except Exception as e:
             stream.add_message(f"[red]Cannot open file: {e}[/red]", "error")
@@ -5406,8 +5424,19 @@ Output ONLY valid JSON."""
         if self._syncing_switches:
             return
 
-        if event.switch.id == "toggle-idleness":
+        if event.switch.id in ("toggle-idleness", "dock-toggle-idleness"):
             self.idle_mode = event.value
+            # Sync both switches
+            self._syncing_switches = True
+            try:
+                self.query_one("#toggle-idleness", Switch).value = event.value
+            except Exception:
+                pass
+            try:
+                self.query_one("#dock-toggle-idleness", Switch).value = event.value
+            except Exception:
+                pass
+            self._syncing_switches = False
             stream = self.query_one(NeuralStream)
 
             # Get mode buttons for visual suspension
@@ -5425,7 +5454,7 @@ Output ONLY valid JSON."""
             if self.idle_mode:
                 # STATE TRANSITION: Idleness engaged (overrides mode)
                 stream.add_message(
-                    f"[bold cyan]🕯 Idle[/bold cyan] — {self.session_mode} suspended",
+                    f"[bold cyan]{MOON} Idle[/bold cyan] — {self.session_mode} suspended",
                     "system"
                 )
                 # Ephemeral scaffolding: show one-time hint for first Idle activation
@@ -5451,7 +5480,7 @@ Output ONLY valid JSON."""
             else:
                 # STATE TRANSITION: Idleness released (mode auto-restores)
                 stream.add_message(
-                    f"[dim]🕯 Idle off[/dim] — {self.session_mode} restored",
+                    f"[dim]{MOON} Idle off[/dim] — {self.session_mode} restored",
                     "system"
                 )
                 # Re-enable mode buttons
@@ -5473,9 +5502,9 @@ Output ONLY valid JSON."""
             self.rag_debug_enabled = event.value
             stream = self.query_one(NeuralStream)
             if self.rag_debug_enabled:
-                stream.add_message("[cyan]🔍 RAG Debug: On[/cyan]", "system")
+                stream.add_message(f"[cyan]{SEARCH} RAG Debug: On[/cyan]", "system")
             else:
-                stream.add_message("[dim]🔍 RAG Debug: Off[/dim]", "system")
+                stream.add_message(f"[dim]{SEARCH} RAG Debug: Off[/dim]", "system")
 
         elif event.switch.id in ("toggle-timestamps", "dock-toggle-timestamps"):
             self.show_timestamps = event.value
@@ -5513,9 +5542,9 @@ Output ONLY valid JSON."""
             # Notify user
             stream = self.query_one(NeuralStream)
             if self.auto_load_refs:
-                stream.add_message("[dim]📄 Auto-load @refs: On (verbs will load files without asking)[/dim]", "system")
+                stream.add_message(f"[dim]{FILE} Auto-load @refs: On (verbs will load files without asking)[/dim]", "system")
             else:
-                stream.add_message("[dim]📄 Auto-load @refs: Off (will ask before loading)[/dim]", "system")
+                stream.add_message(f"[dim]{FILE} Auto-load @refs: Off (will ask before loading)[/dim]", "system")
 
         elif event.switch.id in ("toggle-search-gate", "dock-toggle-search-gate"):
             # Friction Class VI: Search Gate consent toggle
@@ -5544,12 +5573,12 @@ Output ONLY valid JSON."""
                 self.search_manager.open_gate()
                 self.search_gate_enabled = True
                 provider = self.search_manager.state.provider
-                stream.add_message(f"[green]🌐 Search Gate opened ({provider})[/green]", "system")
+                stream.add_message(f"[green]{GLOBE} Search Gate opened ({provider})[/green]", "system")
             else:
                 # Closing the gate
                 self.search_manager.close_gate()
                 self.search_gate_enabled = False
-                stream.add_message("[dim]🔒 Search Gate closed (local-only)[/dim]", "system")
+                stream.add_message(f"[dim]{LOCK} Search Gate closed (local-only)[/dim]", "system")
 
             # Update status bar
             status_bar = self.query_one(StatusBar)
@@ -5597,12 +5626,12 @@ Output ONLY valid JSON."""
                 self.council_gate_enabled = True
                 model_name = self.council_model or "default"
                 status_bar.update_council_gate(model_name)
-                stream.add_message(f"[green]☁️ Council Gate opened ({model_name})[/green]", "system")
+                stream.add_message(f"[green]{CLOUD} Council Gate opened ({model_name})[/green]", "system")
             else:
                 # Closing the gate
                 self.council_gate_enabled = False
                 status_bar.update_council_gate("Off")
-                stream.add_message("[dim]☁️ Council Gate closed (local-only)[/dim]", "system")
+                stream.add_message(f"[dim]{CLOUD} Council Gate closed (local-only)[/dim]", "system")
 
             # Keep both switches visually in sync
             self._syncing_switches = True
@@ -5653,9 +5682,9 @@ Output ONLY valid JSON."""
         status_bar.update_social_carryover(self.social_carryover)
         
         if self.social_carryover:
-            stream.add_message("[dim]🤝 Social Carryover: On — warmth maintained[/dim]", "system")
+            stream.add_message(f"[dim]{HANDSHAKE} Social Carryover: On — warmth maintained[/dim]", "system")
         else:
-            stream.add_message("[cyan]🔲 Social Carryover: Off — neutral ground[/cyan]", "system")
+            stream.add_message(f"[cyan]{SQUARE} Social Carryover: Off — neutral ground[/cyan]", "system")
 
     def _trim_ram_history(self) -> None:
         """Keep RAM history bounded (DB remains the source of truth)."""
@@ -6112,7 +6141,7 @@ Output ONLY valid JSON."""
         """Pull latest changes from remote."""
         import subprocess
         stream = self.query_one(NeuralStream)
-        stream.add_message("[dim]📥 Pulling from remote...[/dim]", "system")
+        stream.add_message(f"[dim]{DOWNLOAD} Pulling from remote...[/dim]", "system")
 
         try:
             result = await asyncio.to_thread(
@@ -6140,7 +6169,7 @@ Output ONLY valid JSON."""
         import subprocess
         stream = self.query_one(NeuralStream)
 
-        stream.add_message(f"[dim]📝 Committing: {message}[/dim]", "system")
+        stream.add_message(f"[dim]{MEMO} Committing: {message}[/dim]", "system")
 
         try:
             await asyncio.to_thread(
@@ -6246,7 +6275,7 @@ Output ONLY valid JSON."""
         """Push commits to remote."""
         import subprocess
         stream = self.query_one(NeuralStream)
-        stream.add_message("[dim]📤 Pushing to remote...[/dim]", "system")
+        stream.add_message(f"[dim]{UPLOAD} Pushing to remote...[/dim]", "system")
 
         try:
             result = await asyncio.to_thread(

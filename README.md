@@ -39,7 +39,7 @@ When your local model hits its limits, consult a cloud model without leaving the
 The local model (NeMo) prepares a **Brief** with your current context, sends it to the cloud model (Council), and contextualizes the response. You see exactly what's happening — no silent escalation.
 
 **Commands:**
-- `F6` or ☁️ toggle - Enable/disable Council Gate
+- `F6` or cloud toggle - Enable/disable Council Gate
 - `/council <query>` - Prepare a redacted Brief + preview (requires confirm)
 - `/council-yes` - Send the pending Brief
 - `/council-no` - Cancel the pending Brief
@@ -56,6 +56,18 @@ The local model (NeMo) prepares a **Brief** with your current context, sends it 
 ### Requirements
 - Python 3.10+
 - [LM Studio](https://lmstudio.ai/) or [Ollama](https://ollama.ai/) running locally
+- A [Nerd Font](https://www.nerdfonts.com/) for glyph rendering (recommended: JetBrainsMono Nerd Font)
+
+### Fonts
+
+Sovwren uses Nerd Font glyphs for icons. Without a Nerd Font, you'll see boxes or question marks.
+
+**Quick setup:**
+1. Download a Nerd Font from [nerdfonts.com/font-downloads](https://www.nerdfonts.com/font-downloads)
+2. Install it (double-click the `.ttf` files)
+3. Set your terminal to use that font
+
+**Fallback mode:** If you can't install fonts, set `USE_NERD_FONTS = False` in `glyphs.py` for ASCII fallbacks.
 
 ### Setup
 
