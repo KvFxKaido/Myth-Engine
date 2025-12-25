@@ -1483,6 +1483,11 @@ class ChatInput(TextArea):
                 event.prevent_default()
             return
 
+        # Let Ctrl+K bubble up to App (Social Carryover toggle)
+        # TextArea handles it as "kill line" - we want App binding instead
+        if event.key == "ctrl+k":
+            return  # Don't call super, let it bubble
+
         # Let other keys pass through to TextArea
         super()._on_key(event)
 
