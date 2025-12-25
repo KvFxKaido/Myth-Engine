@@ -1366,16 +1366,19 @@ class ChatInput(TextArea):
                 event.stop()
                 event.prevent_default()
                 return
-        if event.key in ("tab", "enter"):
+        # Tab accepts suggestion (standard autocomplete behavior)
+        if event.key == "tab":
             if self._accept_mention_suggestion():
                 event.stop()
                 event.prevent_default()
                 return
+        # Escape dismisses suggestions
         if event.key == "escape":
             self._set_mention_visibility(False)
 
-        # Plain Enter = submit
+        # Enter = dismiss suggestions and submit (not accept)
         if event.key == "enter":
+            self._set_mention_visibility(False)
             text = self.text.strip()
             if text:
                 event.stop()

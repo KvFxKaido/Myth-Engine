@@ -333,12 +333,33 @@ class OllamaClient:
         await self.discover_models()
         return self._model_info.get(model_name, {})
 
-    async def list_models(self) -> List[Dict[str, any]]:
-        """List all available models with info"""
+    def _is_cloud_model(self, model_name: str) -> bool:
+        """Check if a model is a cloud model (should be excluded from local picker)."""
+        name_lower = model_name.lower()
+        # Cloud model patterns:
+        # - Contains "-cloud" (e.g., gpt-oss:120b-cloud, deepseek-v3.1:671b-cloud)
+        # - Gemini preview models (e.g., gemini-3-flash-preview)
+        # - GPT-OSS cloud variants
+        if "-cloud" in name_lower:
+            return True
+        if name_lower.startswith("gemini-") and "preview" in name_lower:
+            return True
+        return False
+
+    async def list_models(self, exclude_cloud: bool = True) -> List[Dict[str, any]]:
+        """List all available models with info.
+
+        Args:
+            exclude_cloud: If True, filter out Ollama cloud models (default True).
+        """
         models = await self.discover_models()
-        
+
         model_list = []
         for model in models:
+            # Skip cloud models if requested
+            if exclude_cloud and self._is_cloud_model(model):
+                continue
+
             info = self._model_info.get(model, {})
             model_list.append({
                 'name': model,
@@ -347,7 +368,7 @@ class OllamaClient:
                 'modified_at': info.get('modified_at', ''),
                 'details': info.get('details', {})
             })
-        
+
         return model_list
 
     async def set_base_url(self, base_url: str):
